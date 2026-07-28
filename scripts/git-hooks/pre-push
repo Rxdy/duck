@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+protected_refs=("refs/heads/main" "refs/heads/dev")
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  for protected in "${protected_refs[@]}"; do
+    if [[ "$remote_ref" == "$protected" ]]; then
+      echo "Push direct interdit sur '${protected#refs/heads/}'." >&2
+      echo "Passe par une pull request depuis une branche feature/*." >&2
+      exit 1
+    fi
+  done
+done

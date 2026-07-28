@@ -1,0 +1,25 @@
+{
+  "name": "@duck/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@duck/game-engine": "*",
+    "@duck/map-generator": "*",
+    "@duck/protocol": "*",
+    "@duck/shared": "*",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "vitest": "^3.0.4"
+  }
+}

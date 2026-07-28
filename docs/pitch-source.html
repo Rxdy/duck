@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Duck — Présentation du projet</title>
+<style>
+  @page {
+    size: A4;
+    margin: 2.2cm 2cm 2.4cm 2cm;
+    @bottom-center {
+      content: "Duck — Document de présentation";
+      font-size: 8pt;
+      color: #9a8a5a;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+    }
+  }
+  @page cover {
+    margin: 0;
+    @bottom-center { content: none; }
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    color: #2b2b2b;
+    font-size: 10.5pt;
+    line-height: 1.55;
+  }
+
+  /* ---------- COVER ---------- */
+  .cover {
+    page: cover;
+    height: 100vh;
+    background: linear-gradient(160deg, #FFD84D 0%, #FFC93C 40%, #FF9F1C 100%);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    page-break-after: always;
+  }
+  .cover .emoji {
+    font-size: 90pt;
+    margin-bottom: 0.3cm;
+  }
+  .cover h1 {
+    font-size: 46pt;
+    margin: 0;
+    color: #ffffff;
+    letter-spacing: 1px;
+  }
+  .cover .tagline {
+    margin-top: 0.5cm;
+    font-size: 14pt;
+    color: #4a3a10;
+    font-weight: 600;
+    max-width: 14cm;
+  }
+  .cover .footer-note {
+    position: absolute;
+    bottom: 1.5cm;
+    font-size: 9pt;
+    color: #6b5620;
+  }
+
+  /* ---------- SECTIONS ---------- */
+  h1.section-title {
+    font-size: 17pt;
+    color: #B9711A;
+    border-bottom: 2.5px solid #FFC93C;
+    padding-bottom: 0.15cm;
+    margin-top: 1.1cm;
+    margin-bottom: 0.4cm;
+  }
+  h1.section-title:first-of-type { margin-top: 0; }
+
+  h2 {
+    font-size: 12.5pt;
+    color: #2b2b2b;
+    margin-top: 0.55cm;
+    margin-bottom: 0.2cm;
+  }
+  h2:first-of-type { margin-top: 0.3cm; }
+
+  h3.mini-title {
+    font-size: 10.5pt;
+    color: #B9711A;
+    margin: 0.4cm 0 0.1cm 0;
+  }
+
+  p { margin: 0.2cm 0; text-align: left; }
+
+  ul { margin: 0.15cm 0 0.35cm 0; padding-left: 0.5cm; }
+  li { margin-bottom: 0.12cm; }
+  li strong { color: #2b2b2b; }
+
+  .lead {
+    font-size: 12.5pt;
+    color: #3a3a3a;
+    font-weight: 500;
+  }
+
+  .tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2cm;
+    margin: 0.3cm 0 0.4cm 0;
+  }
+  .tag {
+    background: #FFF3D0;
+    border: 1px solid #FFD84D;
+    color: #7a5a10;
+    border-radius: 20px;
+    padding: 0.08cm 0.35cm;
+    font-size: 9pt;
+    font-weight: 600;
+  }
+
+  .card-grid {
+    display: flex;
+    gap: 0.4cm;
+    margin: 0.3cm 0;
+  }
+  .card {
+    flex: 1;
+    background: #FCFAF3;
+    border: 1px solid #EDE0B8;
+    border-radius: 8px;
+    padding: 0.35cm 0.4cm;
+  }
+  .card h3 {
+    margin: 0 0 0.15cm 0;
+    font-size: 10.5pt;
+    color: #B9711A;
+  }
+  .card p { font-size: 9.5pt; margin: 0; }
+
+  .quote {
+    border-left: 3px solid #FF9F1C;
+    background: #FFFBEF;
+    padding: 0.3cm 0.5cm;
+    margin: 0.35cm 0;
+    font-style: italic;
+    color: #5a4a20;
+  }
+
+  .scenario {
+    background: #FFFBEF;
+    border: 1px dashed #E4C878;
+    border-radius: 8px;
+    padding: 0.35cm 0.5cm;
+    margin: 0.3cm 0 0.4cm 0;
+    font-size: 9.8pt;
+  }
+  .scenario .label {
+    font-size: 8.5pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #B9711A;
+    font-weight: 700;
+    margin-bottom: 0.15cm;
+  }
+
+  table.modes, table.tiles {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.3cm 0 0.4cm 0;
+    font-size: 9.3pt;
+  }
+  table.modes th, table.tiles th {
+    background: #FFC93C;
+    color: #4a3a10;
+    text-align: left;
+    padding: 0.18cm 0.3cm;
+  }
+  table.modes td, table.tiles td {
+    padding: 0.16cm 0.3cm;
+    border-bottom: 1px solid #EFE6C8;
+    vertical-align: top;
+  }
+  table.modes tr:nth-child(even) td, table.tiles tr:nth-child(even) td { background: #FFFBEF; }
+  table.tiles td:first-child { font-weight: 600; white-space: nowrap; }
+
+  table.modes, table.tiles, .scenario, .card-grid, .quote, tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .signoff {
+    margin-top: 0.7cm;
+    padding-top: 0.4cm;
+    border-top: 1px solid #EFE6C8;
+    font-size: 10.5pt;
+    color: #3a3a3a;
+  }
+
+  .page-break { page-break-before: always; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="emoji">🦆</div>
+  <h1>Duck</h1>
+  <div class="tagline">Un jeu multijoueur en ligne, rapide et compétitif,<br>où l'on incarne un canard sur un plateau en grille.</div>
+  <div class="footer-note">Document de présentation du projet</div>
+</div>
+
+<h1 class="section-title">Le concept</h1>
+
+<p class="lead">Duck est un jeu multijoueur en ligne inspiré des mini-jeux créés avec les Wired de Habbo Hotel. Chaque joueur contrôle un canard sur un plateau composé de cases, avec un objectif simple : atteindre la base adverse pour marquer des points, tout en empêchant les autres joueurs d'atteindre la sienne.</p>
+
+<div class="tag-row">
+  <span class="tag">Parties de 2 à 5 min</span>
+  <span class="tag">Multijoueur en ligne</span>
+  <span class="tag">Rendu 3D isométrique</span>
+  <span class="tag">Cartes créées par les joueurs</span>
+  <span class="tag">Jeu-service évolutif</span>
+</div>
+
+<p>L'idée n'est pas de reproduire Habbo, mais de reprendre ce qui rendait ses mini-jeux si addictifs : des règles simples, une infinité de cartes possibles, et une communauté qui crée elle-même une bonne partie du contenu.</p>
+
+<div class="quote">
+  À terme, Duck pourrait devenir une véritable plateforme de jeux sur grille où les joueurs créent, partagent et jouent à des cartes originales — un vrai bac à sable communautaire, mais avec une base technique moderne.
+</div>
+
+<h1 class="section-title">Comment on joue</h1>
+
+<p>Le principe tient en une phrase : on déplace son canard case par case (haut, bas, gauche, droite) sur un plateau en grille, pour rejoindre une base adverse. Simple à comprendre en dix secondes, mais suffisamment riche pour créer des parties vraiment compétitives — tout se joue sur le timing, l'anticipation des trajets adverses et la connaissance de la carte.</p>
+
+<div class="scenario">
+  <div class="label">Exemple de partie</div>
+  Duel sur une carte avec une rivière de glace au centre. Tu fonces tout droit vers la base adverse, mais ton adversaire a placé un mur pour te forcer à passer par la glace : tu glisses de trois cases d'un coup, exactement là où il t'attend. Tu changes de trajectoire, passes par un téléporteur sur le côté, et ressors juste devant sa base avant qu'il ait eu le temps de revenir défendre. +1 point.
+</div>
+
+<h2>Modes de jeu</h2>
+
+<table class="modes">
+  <tr><th>Mode</th><th>Joueurs</th><th>Principe</th></tr>
+  <tr><td>Duel</td><td>2</td><td>Premier à 10 points gagne.</td></tr>
+  <tr><td>2v2</td><td>4 (2 équipes)</td><td>Une base et un score par équipe, coordination avec son coéquipier.</td></tr>
+  <tr><td>FFA 3 joueurs</td><td>3</td><td>Chacun sa base et son spawn, +1 point en atteignant une base adverse.</td></tr>
+  <tr><td>FFA 4 joueurs</td><td>4</td><td>Même principe, façon esprit Habbo.</td></tr>
+  <tr><td>Partie privée</td><td>Variable</td><td>Salon avec code d'invitation pour jouer entre amis.</td></tr>
+  <tr><td>Entraînement</td><td>Solo</td><td>Pour tester une carte librement, sans score.</td></tr>
+</table>
+
+<p>Pour se lancer : un bouton <strong>Jouer</strong> qui cherche automatiquement une partie publique disponible (ou en crée une), ou un code de salon à partager pour jouer entre amis en privé.</p>
+
+<div class="page-break"></div>
+
+<h1 class="section-title">Le plateau et ses pièges</h1>
+
+<p>Le plateau n'est pas qu'une grille vide avec des murs : chaque type de case peut changer complètement la façon de jouer une carte, en restant sur des règles simples et un moteur qui ne fait que déplacer un canard d'une case à l'autre.</p>
+
+<table class="tiles">
+  <tr><th>Case</th><th>Effet</th></tr>
+  <tr><td>Mur / Obstacle</td><td>Bloque le passage — force à contourner ou anticiper.</td></tr>
+  <tr><td>Glace</td><td>Le canard glisse jusqu'au prochain obstacle : parfait pour surprendre ou se faire piéger.</td></tr>
+  <tr><td>Tapis roulant</td><td>Déplace automatiquement le canard dans une direction, à chaque tour.</td></tr>
+  <tr><td>Téléporteur</td><td>Envoie instantanément le canard ailleurs sur la carte — raccourci ou embuscade.</td></tr>
+  <tr><td>Eau / Lave</td><td>Cases dangereuses à éviter, ou à franchir via un pont.</td></tr>
+  <tr><td>Bonus</td><td>Effet temporaire : vitesse, dash d'une case supplémentaire...</td></tr>
+  <tr><td>Porte</td><td>Peut changer d'état en cours de partie (ouverte/fermée), pour des cartes à mécanique.</td></tr>
+  <tr><td>Brouillard de guerre</td><td>Cache une partie de la carte : on ne voit plus venir l'adversaire de loin.</td></tr>
+  <tr><td>Piège</td><td>Effet négatif temporaire déclenché en marchant dessus.</td></tr>
+</table>
+
+<p>Toutes ces mécaniques sont pensées pour rester compatibles entre elles sur une même carte, ce qui permet une énorme variété de styles : une carte purement labyrinthe, une carte à glace ultra rapide, une carte à téléporteurs chaotique, une carte de contrôle avec des portes à activer...</p>
+
+<h1 class="section-title">Un univers en 3D, mais simple</h1>
+
+<p>Le jeu sera rendu en 3D, mais pas en vue libre façon FPS : une <strong>caméra fixe en vue isométrique</strong>, un peu comme les vieux jeux de plateau. Un style <strong>low poly</strong>, coloré, des canards qui se déplacent case par case avec de petites animations vivantes (rebond à l'atterrissage, rotation vers la direction du déplacement, petite éclaboussure dans l'eau, particules de confettis quand on marque un point), des murs et obstacles avec du relief plutôt que des sprites plats. On garde la simplicité d'un jeu sur grille — donc facile à développer et à maintenir — tout en ayant un rendu beaucoup plus vivant qu'un plateau 2D.</p>
+
+<div class="page-break"></div>
+
+<h1 class="section-title">Crée tes propres cartes</h1>
+
+<div class="card-grid">
+  <div class="card">
+    <h3>Génération procédurale</h3>
+    <p>Un bouton génère une carte aléatoire à partir de paramètres (taille, densité de murs, nombre d'obstacles/bonus, type de décor), en garantissant que chaque spawn et chaque base restent accessibles (vérifié automatiquement, façon BFS/A*).</p>
+  </div>
+  <div class="card">
+    <h3>Éditeur de cartes</h3>
+    <p>Outils classiques : pinceau, gomme, remplissage, sélection, copier/coller, rotation. Éléments posables : mur, eau, lave, glace, arbre, caisse, pierre, spawn, base, téléporteur, piège, bonus, décor.</p>
+  </div>
+  <div class="card">
+    <h3>Mode Test</h3>
+    <p>Un bouton "Tester" lance directement une partie solo sur la carte en cours d'édition : on vérifie les collisions, les bonus, les téléporteurs, sans avoir besoin de publier quoi que ce soit.</p>
+  </div>
+</div>
+
+<p>Une fois satisfait, le créateur peut <strong>publier</strong> sa carte (nom, description, visibilité publique ou privée). Les autres joueurs peuvent alors la noter, la télécharger et y jouer — le contenu du jeu grandit avec la communauté, pas seulement au rythme du développement.</p>
+
+<p>C'est probablement l'axe le plus fort du projet à moyen terme : un éditeur de règles façon « Wired » de Habbo (<em>Duck Logic</em>), avec des blocs visuels (déclencheurs, conditions, actions), pour que la communauté invente elle-même de nouveaux modes de jeu sans écrire une ligne de code.</p>
+
+<h1 class="section-title">Progression & personnalisation</h1>
+
+<p>Chaque joueur a un compte avec de la progression : <strong>XP</strong>, <strong>niveaux</strong>, <strong>défis quotidiens et hebdomadaires</strong>, <strong>succès</strong>, et des <strong>saisons</strong> qui rythment le jeu avec de nouvelles récompenses. Un classement général avec score <strong>Elo</strong>, victoires/défaites, ratio et statistiques de partie permet de se situer face aux autres joueurs.</p>
+
+<p>Toute cette progression débloque de la personnalisation pour son canard : <strong>skins</strong>, couleurs, chapeaux, accessoires, traînées de déplacement, animations de victoire, emotes, titres de joueur, cadres de profil. Les récompenses restent volontairement <strong>cosmétiques uniquement</strong> — aucun avantage en jeu ne s'achète ou ne se débloque, pour garder la compétition saine du début à la fin.</p>
+
+<h1 class="section-title">Accessible partout</h1>
+
+<p>Le jeu est pensé pour être jouable au clavier sur ordinateur, comme au tactile (joystick virtuel ou boutons directionnels) sur mobile et tablette — PC, Mac, iPad, iPhone, Android. L'idée est de pouvoir lancer une partie rapide de deux à cinq minutes depuis n'importe quel appareil, sans installation.</p>
+
+<div class="page-break"></div>
+
+<h1 class="section-title">Et après le lancement ?</h1>
+
+<p>Une fois le cœur du jeu solide (déplacement, matchmaking, cartes, classement), plusieurs pistes permettent de faire grandir Duck bien au-delà d'un simple clone des mini-jeux Habbo :</p>
+
+<ul>
+  <li><strong>Duck Logic</strong> — éditeur de logique visuel pour créer de nouveaux modes de jeu sans coder.</li>
+  <li><strong>Workshop communautaire</strong> — publication, notation, téléchargement de cartes, avec une rotation hebdomadaire des plus populaires.</li>
+  <li><strong>Tournois automatiques</strong> chaque week-end, et un classement dédié aux créateurs de cartes.</li>
+  <li><strong>Clans / guildes</strong> pour jouer en groupe régulièrement.</li>
+  <li><strong>Mode spectateur</strong> et système de <strong>replay</strong> (basé sur les actions, léger) pour revoir ou partager une partie.</li>
+  <li><strong>Bots</strong> utilisant le même protocole que les joueurs, pour remplir une partie ou tester une carte tout seul.</li>
+  <li><strong>Événements temporaires</strong> (Halloween, Noël, Été...) avec cartes et skins à durée limitée.</li>
+  <li><strong>API publique</strong> pour que la communauté crée ses propres outils autour du jeu.</li>
+</ul>
+
+<p class="signoff">Voilà l'idée dans les grandes lignes : un jeu simple à prendre en main, rapide à jouer, avec un vrai potentiel créatif autour des cartes. J'avais envie de la partager avec toi — dis-moi ce que t'en penses.</p>
+
+</body>
+</html>
