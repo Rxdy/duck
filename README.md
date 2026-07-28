@@ -39,13 +39,13 @@ docker compose up --build
 
 ## Scripts
 
-| Commande | Rôle |
-|---|---|
-| `npm run lint` | ESLint sur tout le monorepo |
-| `npm run format` | Vérifie le formatage Prettier |
-| `npm run typecheck` | Vérification TypeScript de tous les packages |
-| `npm test` | Tests unitaires (Vitest) de tous les packages |
-| `npm run build` | Build de tous les packages/apps |
+| Commande            | Rôle                                          |
+| ------------------- | --------------------------------------------- |
+| `npm run lint`      | ESLint sur tout le monorepo                   |
+| `npm run format`    | Vérifie le formatage Prettier                 |
+| `npm run typecheck` | Vérification TypeScript de tous les packages  |
+| `npm test`          | Tests unitaires (Vitest) de tous les packages |
+| `npm run build`     | Build de tous les packages/apps               |
 
 ## Workflow Git
 
