@@ -7,13 +7,14 @@ import {
   buildBoardTiles,
   computeIsometricFrame,
   computeTopDownFrame,
-  directionRotationY,
+  directionFacing,
   isWebglAvailable,
   tileColor,
+  type Facing,
   type TerritoryBase,
 } from "../../lib/board.js";
 import type { TileKind } from "../../lib/mapEditor.js";
-import DuckMesh from "./DuckMesh.vue";
+import DuckSprite from "./DuckSprite.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -102,12 +103,12 @@ const renderTiles = computed(() => {
   });
 });
 
-// Direction actuellement affichée par chaque canard (voir DuckMesh.vue, qui
-// fait toujours face à +Z localement) : comparée à la position précédente à
-// chaque mise à jour, pour ne pivoter que quand le joueur bouge réellement
-// et garder la dernière direction affichée le reste du temps (immobile ne
-// doit pas remettre le canard face à "DOWN").
-const facingByPlayerId = ref(new Map<string, number>());
+// Direction actuellement affichée par chaque canard (voir DuckSprite.vue) :
+// comparée à la position précédente à chaque mise à jour, pour ne changer
+// de pose que sur un vrai déplacement et garder la dernière direction le
+// reste du temps (immobile ne doit pas remettre le canard face "bas" par
+// défaut).
+const facingByPlayerId = ref(new Map<string, Facing>());
 const lastPositionByPlayerId = new Map<string, { x: number; y: number }>();
 watch(
   () => props.players,
@@ -115,9 +116,16 @@ watch(
     for (const p of players ?? []) {
       const last = lastPositionByPlayerId.get(p.id);
       if (!last) {
-        facingByPlayerId.value.set(p.id, 0);
+        // "right" (pose non retournée) plutôt que "down" (retournée en
+        // miroir) : évite un bug d'affichage constaté où un sprite créé
+        // avec une échelle X négative dès son premier rendu (avant toute
+        // vraie mise à jour réactive) ignore ce retournement jusqu'au
+        // prochain changement de props — en partant d'une pose jamais
+        // retournée, ce cas ne se présente simplement jamais.
+        facingByPlayerId.value.set(p.id, "right");
       } else if (last.x !== p.x || last.y !== p.y) {
-        facingByPlayerId.value.set(p.id, directionRotationY(p.x - last.x, p.y - last.y));
+        const facing = directionFacing(p.x - last.x, p.y - last.y);
+        if (facing) facingByPlayerId.value.set(p.id, facing);
       }
       lastPositionByPlayerId.set(p.id, { x: p.x, y: p.y });
     }
@@ -225,9 +233,13 @@ function handleClick(event: MouseEvent) {
         v-for="player in props.players ?? []"
         :key="player.id"
         :position="[player.x + 0.5, DUCK_SIZE / 2, player.y + 0.5]"
-        :rotation="[0, facingByPlayerId.get(player.id) ?? 0, 0]"
       >
-        <DuckMesh :color="player.color" :accessory="player.accessory" :size="DUCK_SIZE" />
+        <DuckSprite
+          :color="player.color"
+          :accessory="player.accessory"
+          :size="DUCK_SIZE"
+          :facing="facingByPlayerId.get(player.id) ?? 'right'"
+        />
       </TresGroup>
     </TresCanvas>
 

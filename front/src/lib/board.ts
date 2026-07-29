@@ -28,19 +28,22 @@ export function tileColor(kind: TileKind | undefined, shade: "light" | "dark"): 
   return shade === "light" ? "#33415b" : "#28374d";
 }
 
+export type Facing = "up" | "down" | "left" | "right";
+
 /**
- * Rotation Y (radians) à appliquer au canard (voir organisms/DuckMesh.vue)
- * pour qu'il regarde dans la direction du déplacement. Le modèle fait face à
- * +Z par défaut, qui correspond à "DOWN" (dy > 0) sur le plateau — voir
- * BoardPreview.vue, où le monde X/Z correspond directement aux cases x/y.
- * `dx`/`dy` sont toujours -1, 0 ou 1 en pratique (un déplacement = une case),
- * mais seul leur signe compte ici.
+ * Direction affichée par le canard (voir organisms/DuckSprite.vue) : le
+ * déplacement se fait par téléportation case par case (pas d'interpolation
+ * continue), donc pas besoin d'angle intermédiaire — seulement l'une des 4
+ * poses fixes correspondant à la dernière case franchie. `undefined` si
+ * `dx`/`dy` sont tous les deux nuls (ne devrait pas arriver pour un vrai
+ * déplacement, mais évite de forcer une face par défaut arbitraire).
  */
-export function directionRotationY(dx: number, dy: number): number {
-  if (dx > 0) return Math.PI / 2; // RIGHT
-  if (dx < 0) return -Math.PI / 2; // LEFT
-  if (dy < 0) return Math.PI; // UP
-  return 0; // DOWN (et par défaut si aucun mouvement)
+export function directionFacing(dx: number, dy: number): Facing | undefined {
+  if (dx > 0) return "right";
+  if (dx < 0) return "left";
+  if (dy > 0) return "down";
+  if (dy < 0) return "up";
+  return undefined;
 }
 
 function hexToRgb(hex: string): [number, number, number] {
