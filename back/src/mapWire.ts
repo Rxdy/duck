@@ -1,4 +1,4 @@
-import { Tile, type GameMap } from "./game-engine/index.js";
+import { Tile, isWithinBounds, tileAt, type GameMap } from "./game-engine/index.js";
 
 const TILE_VALUES = new Set<string>(Object.values(Tile));
 
@@ -24,4 +24,23 @@ export function buildMapFromWire(raw: {
   );
 
   return { width, height, tiles };
+}
+
+/**
+ * Valide la liste de spawns envoyée par le client (ordre des couleurs de
+ * l'éditeur) contre la carte déjà construite : toute position hors limites ou
+ * qui ne correspond pas réellement à une case Spawn est écartée plutôt que de
+ * faire confiance aveuglément au client.
+ */
+export function parseWireSpawns(
+  raw: { x: number; y: number }[],
+  map: GameMap,
+): { x: number; y: number }[] {
+  return raw.filter(
+    (spawn) =>
+      Number.isInteger(spawn?.x) &&
+      Number.isInteger(spawn?.y) &&
+      isWithinBounds(map, spawn.x, spawn.y) &&
+      tileAt(map, spawn.x, spawn.y) === Tile.Spawn,
+  );
 }
