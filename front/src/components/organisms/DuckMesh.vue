@@ -28,14 +28,13 @@ const props = withDefaults(
 );
 
 const accessory = computed(() => toAccessoryKind(props.accessory));
-// Ailes/queue plus sombres et ventre plus clair que le corps : sans ce
-// contraste à deux tons, une forme unie de la même couleur ne se distingue
-// quasiment pas d'elle-même (seul le relief de l'éclairage la sépare), et la
-// silhouette relit comme un simple œuf plutôt qu'un oiseau.
-const wingColor = computed(() => mixHexColors(props.color, "#000000", 0.35));
-const bellyColor = computed(() => mixHexColors(props.color, "#ffffff", 0.45));
+// Ailes légèrement plus sombres que le corps : sans ce contraste, une forme
+// unie de la même couleur ne se distingue quasiment pas d'elle-même (seul le
+// relief de l'éclairage la sépare).
+const wingColor = computed(() => mixHexColors(props.color, "#000000", 0.3));
 
 const BEAK_COLOR = "#FF9F1C";
+const EYE_WHITE = "#FFFFFF";
 const EYE_COLOR = "#1A1A1A";
 
 const BODY_MATERIAL = { roughness: 0.5, metalness: 0.08 };
@@ -47,10 +46,12 @@ const GOLD_MATERIAL = { roughness: 0.3, metalness: 0.8 };
 
 <template>
   <TresGroup>
-    <!-- Corps -->
+    <!-- Corps : petit, surtout caché sous/derrière la tête (voir plus bas) —
+         c'est la tête, disproportionnée, qui porte l'essentiel du volume,
+         façon canard "chibi" plutôt qu'un vrai gabarit anatomique. -->
     <TresMesh
-      :position="[0, -size * 0.08, -size * 0.05]"
-      :scale="[size * 0.4, size * 0.27, size * 0.5]"
+      :position="[0, -size * 0.22, -size * 0.12]"
+      :scale="[size * 0.24, size * 0.19, size * 0.26]"
       cast-shadow
       receive-shadow
     >
@@ -58,102 +59,86 @@ const GOLD_MATERIAL = { roughness: 0.3, metalness: 0.8 };
       <TresMeshStandardMaterial :color="color" v-bind="BODY_MATERIAL" />
     </TresMesh>
 
-    <!-- Ventre : patch clair sous le corps, comme le plumage clair d'un
-         canard sous des ailes plus sombres. -->
+    <!-- Ailes : petites bosses sur les côtés du corps, discrètes plutôt que
+         de vraies ailes déployées. -->
     <TresMesh
-      :position="[0, -size * 0.2, size * 0.05]"
-      :scale="[size * 0.32, size * 0.13, size * 0.38]"
+      :position="[size * 0.22, -size * 0.2, -size * 0.08]"
+      :rotation="[0, -0.1, 0.05]"
+      :scale="[size * 0.07, size * 0.13, size * 0.15]"
+      cast-shadow
+    >
+      <TresSphereGeometry :args="[1, 12, 10]" />
+      <TresMeshStandardMaterial :color="wingColor" v-bind="BODY_MATERIAL" />
+    </TresMesh>
+    <TresMesh
+      :position="[-size * 0.22, -size * 0.2, -size * 0.08]"
+      :rotation="[0, 0.1, -0.05]"
+      :scale="[size * 0.07, size * 0.13, size * 0.15]"
+      cast-shadow
+    >
+      <TresSphereGeometry :args="[1, 12, 10]" />
+      <TresMeshStandardMaterial :color="wingColor" v-bind="BODY_MATERIAL" />
+    </TresMesh>
+
+    <!-- Tête : la forme dominante, très ronde et surdimensionnée (voir
+         référence visuelle façon canard de jeu mobile/cartoon "chibi"). -->
+    <TresMesh
+      :position="[0, size * 0.08, size * 0.12]"
+      :scale="[size * 0.34, size * 0.32, size * 0.36]"
+      cast-shadow
       receive-shadow
+    >
+      <TresSphereGeometry :args="[1, 24, 18]" />
+      <TresMeshStandardMaterial :color="color" v-bind="BODY_MATERIAL" />
+    </TresMesh>
+
+    <!-- Bec : large et plat (aplati sur Y), pas un simple cône fin — c'est ce
+         qui différencie un bec de canard d'un bec d'oiseau générique. -->
+    <TresMesh
+      :position="[0, size * 0.0, size * 0.46]"
+      :scale="[size * 0.17, size * 0.08, size * 0.15]"
+      cast-shadow
     >
       <TresSphereGeometry :args="[1, 16, 12]" />
-      <TresMeshStandardMaterial :color="bellyColor" v-bind="BODY_MATERIAL" />
-    </TresMesh>
-
-    <!-- Ailes : accolées sur les côtés du corps, étirées vers l'arrière comme
-         des ailes repliées plutôt qu'une simple bosse ronde. -->
-    <TresMesh
-      :position="[size * 0.34, -size * 0.06, -size * 0.17]"
-      :rotation="[0, -0.15, 0.08]"
-      :scale="[size * 0.1, size * 0.17, size * 0.24]"
-      cast-shadow
-    >
-      <TresSphereGeometry :args="[1, 12, 10]" />
-      <TresMeshStandardMaterial :color="wingColor" v-bind="BODY_MATERIAL" />
-    </TresMesh>
-    <TresMesh
-      :position="[-size * 0.34, -size * 0.06, -size * 0.17]"
-      :rotation="[0, 0.15, -0.08]"
-      :scale="[size * 0.1, size * 0.17, size * 0.24]"
-      cast-shadow
-    >
-      <TresSphereGeometry :args="[1, 12, 10]" />
-      <TresMeshStandardMaterial :color="wingColor" v-bind="BODY_MATERIAL" />
-    </TresMesh>
-
-    <!-- Queue : petite touffe de plumes relevée à l'arrière, signature
-         silhouette du canard vue de profil. -->
-    <TresMesh
-      :position="[0, size * 0.06, -size * 0.56]"
-      :rotation="[-Math.PI / 2 - 0.5, 0, 0]"
-      :scale="[size * 0.13, size * 0.27, size * 0.13]"
-      cast-shadow
-    >
-      <TresConeGeometry :args="[1, 1, 10]" />
-      <TresMeshStandardMaterial :color="wingColor" v-bind="BODY_MATERIAL" />
-    </TresMesh>
-
-    <!-- Tête -->
-    <TresMesh
-      :position="[0, size * 0.22, size * 0.28]"
-      :scale="[size * 0.24, size * 0.22, size * 0.24]"
-      cast-shadow
-      receive-shadow
-    >
-      <TresSphereGeometry :args="[1, 20, 16]" />
-      <TresMeshStandardMaterial :color="color" v-bind="BODY_MATERIAL" />
-    </TresMesh>
-
-    <!-- Bec : part de la surface de la tête (~0.52*size) et dépasse nettement devant. -->
-    <TresMesh
-      :position="[0, size * 0.19, size * 0.6]"
-      :rotation="[Math.PI / 2, 0, 0]"
-      :scale="[size * 0.1, size * 0.1, size * 0.2]"
-      cast-shadow
-    >
-      <TresConeGeometry :args="[1, 1, 12]" />
       <TresMeshStandardMaterial :color="BEAK_COLOR" v-bind="BEAK_MATERIAL" />
     </TresMesh>
+    <!-- Ligne de bouche : fine bande plus sombre entre bec haut/bas. -->
+    <TresMesh :position="[0, -size * 0.015, size * 0.55]" :scale="[size * 0.13, size * 0.012, size * 0.06]">
+      <TresBoxGeometry :args="[1, 1, 1]" />
+      <TresMeshStandardMaterial color="#C97A15" v-bind="BEAK_MATERIAL" />
+    </TresMesh>
 
-    <!-- Yeux : légèrement au-delà de la surface de la tête pour rester visibles. -->
-    <TresMesh
-      :position="[size * 0.15, size * 0.28, size * 0.48]"
-      :scale="[size * 0.045, size * 0.045, size * 0.045]"
-    >
+    <!-- Yeux : gros et ronds (blanc + pupille), hauts et rapprochés sur le
+         devant de la tête pour un rendu "cartoon" expressif. -->
+    <TresMesh :position="[size * 0.13, size * 0.22, size * 0.42]" :scale="[size * 0.08, size * 0.08, size * 0.08]">
+      <TresSphereGeometry :args="[1, 12, 12]" />
+      <TresMeshStandardMaterial :color="EYE_WHITE" v-bind="EYE_MATERIAL" />
+    </TresMesh>
+    <TresMesh :position="[size * 0.14, size * 0.23, size * 0.47]" :scale="[size * 0.045, size * 0.045, size * 0.045]">
       <TresSphereGeometry :args="[1, 10, 10]" />
       <TresMeshStandardMaterial :color="EYE_COLOR" v-bind="EYE_MATERIAL" />
     </TresMesh>
-    <TresMesh
-      :position="[-size * 0.15, size * 0.28, size * 0.48]"
-      :scale="[size * 0.045, size * 0.045, size * 0.045]"
-    >
+    <TresMesh :position="[-size * 0.13, size * 0.22, size * 0.42]" :scale="[size * 0.08, size * 0.08, size * 0.08]">
+      <TresSphereGeometry :args="[1, 12, 12]" />
+      <TresMeshStandardMaterial :color="EYE_WHITE" v-bind="EYE_MATERIAL" />
+    </TresMesh>
+    <TresMesh :position="[-size * 0.14, size * 0.23, size * 0.47]" :scale="[size * 0.045, size * 0.045, size * 0.045]">
       <TresSphereGeometry :args="[1, 10, 10]" />
       <TresMeshStandardMaterial :color="EYE_COLOR" v-bind="EYE_MATERIAL" />
     </TresMesh>
 
-    <!-- Pattes : décalées vers l'avant et un peu écartées pour ne pas rester
-         cachées sous le corps vu d'en haut (voir aussi le corps aplati
-         ci-dessus, qui libère de la hauteur pour qu'elles se voient). -->
+    <!-- Pattes : courtes et rapprochées, sous le centre du corps. -->
     <TresMesh
-      :position="[size * 0.15, -size * 0.4, size * 0.12]"
-      :scale="[size * 0.035, size * 0.16, size * 0.035]"
+      :position="[size * 0.09, -size * 0.39, size * 0.05]"
+      :scale="[size * 0.032, size * 0.14, size * 0.032]"
       cast-shadow
     >
       <TresCylinderGeometry :args="[1, 1, 1, 10]" />
       <TresMeshStandardMaterial :color="BEAK_COLOR" v-bind="BEAK_MATERIAL" />
     </TresMesh>
     <TresMesh
-      :position="[-size * 0.15, -size * 0.4, size * 0.12]"
-      :scale="[size * 0.035, size * 0.16, size * 0.035]"
+      :position="[-size * 0.09, -size * 0.39, size * 0.05]"
+      :scale="[size * 0.032, size * 0.14, size * 0.032]"
       cast-shadow
     >
       <TresCylinderGeometry :args="[1, 1, 1, 10]" />
@@ -162,16 +147,16 @@ const GOLD_MATERIAL = { roughness: 0.3, metalness: 0.8 };
 
     <!-- Pieds : petites palmes plates au sol. -->
     <TresMesh
-      :position="[size * 0.15, -size * 0.49, size * 0.19]"
-      :scale="[size * 0.08, size * 0.02, size * 0.12]"
+      :position="[size * 0.09, -size * 0.47, size * 0.11]"
+      :scale="[size * 0.075, size * 0.02, size * 0.11]"
       cast-shadow
     >
       <TresBoxGeometry :args="[1, 1, 1]" />
       <TresMeshStandardMaterial :color="BEAK_COLOR" v-bind="BEAK_MATERIAL" />
     </TresMesh>
     <TresMesh
-      :position="[-size * 0.15, -size * 0.49, size * 0.19]"
-      :scale="[size * 0.08, size * 0.02, size * 0.12]"
+      :position="[-size * 0.09, -size * 0.47, size * 0.11]"
+      :scale="[size * 0.075, size * 0.02, size * 0.11]"
       cast-shadow
     >
       <TresBoxGeometry :args="[1, 1, 1]" />
@@ -179,7 +164,7 @@ const GOLD_MATERIAL = { roughness: 0.3, metalness: 0.8 };
     </TresMesh>
 
     <!-- Accessoire (skin) : posé sur la tête -->
-    <TresGroup v-if="accessory === 'top-hat'" :position="[0, size * 0.4, size * 0.28]">
+    <TresGroup v-if="accessory === 'top-hat'" :position="[0, size * 0.4, size * 0.14]">
       <TresMesh :scale="[size * 0.2, size * 0.02, size * 0.2]" cast-shadow>
         <TresCylinderGeometry :args="[1, 1, 1, 20]" />
         <TresMeshStandardMaterial color="#111111" v-bind="FABRIC_MATERIAL" />
@@ -194,7 +179,7 @@ const GOLD_MATERIAL = { roughness: 0.3, metalness: 0.8 };
       </TresMesh>
     </TresGroup>
 
-    <TresGroup v-else-if="accessory === 'cap'" :position="[0, size * 0.38, size * 0.28]">
+    <TresGroup v-else-if="accessory === 'cap'" :position="[0, size * 0.38, size * 0.14]">
       <TresMesh :scale="[size * 0.19, size * 0.13, size * 0.19]" cast-shadow>
         <TresSphereGeometry :args="[1, 20, 14, 0, Math.PI * 2, 0, Math.PI / 2]" />
         <TresMeshStandardMaterial color="#2563EB" v-bind="FABRIC_MATERIAL" />
@@ -210,7 +195,7 @@ const GOLD_MATERIAL = { roughness: 0.3, metalness: 0.8 };
       </TresMesh>
     </TresGroup>
 
-    <TresGroup v-else-if="accessory === 'crown'" :position="[0, size * 0.4, size * 0.28]">
+    <TresGroup v-else-if="accessory === 'crown'" :position="[0, size * 0.4, size * 0.14]">
       <TresMesh :scale="[size * 0.19, size * 0.07, size * 0.19]" cast-shadow>
         <TresCylinderGeometry :args="[1, 1, 1, 20]" />
         <TresMeshStandardMaterial color="#FFD700" v-bind="GOLD_MATERIAL" />
