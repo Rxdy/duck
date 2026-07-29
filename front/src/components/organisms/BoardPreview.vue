@@ -116,13 +116,13 @@ watch(
     for (const p of players ?? []) {
       const last = lastPositionByPlayerId.get(p.id);
       if (!last) {
-        // "right" (pose non retournée) plutôt que "down" (retournée en
-        // miroir) : évite un bug d'affichage constaté où un sprite créé
-        // avec une échelle X négative dès son premier rendu (avant toute
-        // vraie mise à jour réactive) ignore ce retournement jusqu'au
-        // prochain changement de props — en partant d'une pose jamais
-        // retournée, ce cas ne se présente simplement jamais.
-        facingByPlayerId.value.set(p.id, "right");
+        // "se" (pose non retournée) plutôt que "sw" (retournée en miroir) :
+        // évite un bug d'affichage constaté où un sprite créé avec une
+        // échelle X négative dès son premier rendu (avant toute vraie mise
+        // à jour réactive) ignore ce retournement jusqu'au prochain
+        // changement de props — en partant d'une pose jamais retournée, ce
+        // cas ne se présente simplement jamais.
+        facingByPlayerId.value.set(p.id, "se");
       } else if (last.x !== p.x || last.y !== p.y) {
         const facing = directionFacing(p.x - last.x, p.y - last.y);
         if (facing) facingByPlayerId.value.set(p.id, facing);
@@ -238,7 +238,7 @@ function handleClick(event: MouseEvent) {
           :color="player.color"
           :accessory="player.accessory"
           :size="DUCK_SIZE"
-          :facing="facingByPlayerId.get(player.id) ?? 'right'"
+          :facing="facingByPlayerId.get(player.id) ?? 'se'"
         />
       </TresGroup>
     </TresCanvas>

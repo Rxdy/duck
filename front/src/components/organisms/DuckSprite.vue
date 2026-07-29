@@ -9,14 +9,13 @@ import { drawDuckSprite, duckSpriteAspect, type DuckView } from "../../lib/duckS
  * Canard-sprite : une image en aplats de couleur (voir duckSprite.ts)
  * plaquée sur un THREE.Sprite, qui reste toujours face à la caméra quel que
  * soit l'angle isométrique (technique "Habbo" : décor 3D, personnage en
- * image plate). 4 directions de déplacement possibles (voir
- * board.ts#directionFacing), mais seulement 2 dessins réels : la caméra
- * isométrique étant décalée à parts égales sur +X et +Z, RIGHT et DOWN
- * rapprochent TOUJOURS le joueur de la caméra (même pose "qui s'approche",
- * en miroir l'une de l'autre) et LEFT/UP l'en éloignent TOUJOURS (même pose
- * "de dos", déjà symétrique, jamais retournée). Le déplacement se fait par
- * téléportation case par case, donc aucune animation de transition à gérer
- * ici.
+ * image plate). 4 directions à l'écran (voir board.ts#directionFacing :
+ * SE/SW/NE/NW, les diagonales isométriques réelles), mais seulement 2
+ * dessins : SE/SW rapprochent TOUJOURS le joueur de la caméra (même pose
+ * "qui s'approche", en miroir l'une de l'autre) et NE/NW l'en éloignent
+ * TOUJOURS (même pose "de dos", déjà symétrique, jamais retournée). Le
+ * déplacement se fait par téléportation case par case, donc aucune
+ * animation de transition à gérer ici.
  */
 const props = withDefaults(
   defineProps<{
@@ -25,17 +24,17 @@ const props = withDefaults(
     accessory?: string;
     facing?: Facing;
   }>(),
-  { size: 0.8, accessory: "none", facing: "right" },
+  { size: 0.8, accessory: "none", facing: "se" },
 );
 
 const accessory = computed(() => toAccessoryKind(props.accessory));
 
-const view = computed((): DuckView => (props.facing === "left" || props.facing === "up" ? "back" : "approach"));
+const view = computed((): DuckView => (props.facing === "nw" || props.facing === "ne" ? "back" : "approach"));
 
-// Le dessin "approach" fait face à droite par défaut (RIGHT) : miroir
-// horizontal pour DOWN, l'autre direction "qui s'approche". "back" est déjà
-// symétrique, jamais retourné.
-const mirror = computed(() => (props.facing === "down" ? -1 : 1));
+// Le dessin "approach" fait face au SE par défaut : miroir horizontal pour
+// SW, l'autre direction "qui s'approche". "back" est déjà symétrique,
+// jamais retourné.
+const mirror = computed(() => (props.facing === "sw" ? -1 : 1));
 
 const texture = computed(() => {
   const canvas = drawDuckSprite(props.color, accessory.value, view.value);
