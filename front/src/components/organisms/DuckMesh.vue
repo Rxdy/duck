@@ -31,7 +31,7 @@ const accessory = computed(() => toAccessoryKind(props.accessory));
 // Ailes légèrement plus sombres que le corps : sans ce contraste, une forme
 // unie de la même couleur ne se distingue quasiment pas d'elle-même (seul le
 // relief de l'éclairage la sépare).
-const wingColor = computed(() => mixHexColors(props.color, "#000000", 0.3));
+const wingColor = computed(() => mixHexColors(props.color, "#000000", 0.42));
 
 const BEAK_COLOR = "#FF9F1C";
 const EYE_WHITE = "#FFFFFF";
@@ -65,21 +65,22 @@ const GOLD_MATERIAL = { roughness: 0.3, metalness: 0.8 };
       <TresMeshStandardMaterial :color="color" v-bind="BODY_MATERIAL" />
     </TresMesh>
 
-    <!-- Ailes : petites bosses sur les côtés du corps, discrètes plutôt que
-         de vraies ailes déployées. -->
+    <!-- Ailes : patch sombre net sur le côté du corps — un ton nettement
+         plus marqué qu'un simple modelé lumière/ombre, pour lire comme une
+         vraie marque graphique plutôt qu'une bosse. -->
     <TresMesh
-      :position="[size * 0.22, -size * 0.2, -size * 0.03]"
+      :position="[size * 0.23, -size * 0.2, -size * 0.04]"
       :rotation="[0, -0.1, 0.05]"
-      :scale="[size * 0.07, size * 0.13, size * 0.15]"
+      :scale="[size * 0.095, size * 0.16, size * 0.19]"
       cast-shadow
     >
       <TresSphereGeometry :args="[1, 12, 10]" />
       <TresMeshStandardMaterial :color="wingColor" v-bind="BODY_MATERIAL" />
     </TresMesh>
     <TresMesh
-      :position="[-size * 0.22, -size * 0.2, -size * 0.03]"
+      :position="[-size * 0.23, -size * 0.2, -size * 0.04]"
       :rotation="[0, 0.1, -0.05]"
-      :scale="[size * 0.07, size * 0.13, size * 0.15]"
+      :scale="[size * 0.095, size * 0.16, size * 0.19]"
       cast-shadow
     >
       <TresSphereGeometry :args="[1, 12, 10]" />
@@ -130,6 +131,25 @@ const GOLD_MATERIAL = { roughness: 0.3, metalness: 0.8 };
     </TresMesh>
     <TresMesh :position="[-size * 0.14, size * 0.25, size * 0.37]" :scale="[size * 0.045, size * 0.045, size * 0.045]">
       <TresSphereGeometry :args="[1, 10, 10]" />
+      <TresMeshStandardMaterial :color="EYE_COLOR" v-bind="EYE_MATERIAL" />
+    </TresMesh>
+
+    <!-- Sourcils : paupière basse inclinée au-dessus de chaque œil, pour un
+         regard "mécontent" au lieu d'un rond ouvert neutre. -->
+    <TresMesh
+      :position="[size * 0.13, size * 0.3, size * 0.31]"
+      :rotation="[0.55, 0, -0.15]"
+      :scale="[size * 0.09, size * 0.025, size * 0.06]"
+    >
+      <TresSphereGeometry :args="[1, 10, 8]" />
+      <TresMeshStandardMaterial :color="EYE_COLOR" v-bind="EYE_MATERIAL" />
+    </TresMesh>
+    <TresMesh
+      :position="[-size * 0.13, size * 0.3, size * 0.31]"
+      :rotation="[0.55, 0, 0.15]"
+      :scale="[size * 0.09, size * 0.025, size * 0.06]"
+    >
+      <TresSphereGeometry :args="[1, 10, 8]" />
       <TresMeshStandardMaterial :color="EYE_COLOR" v-bind="EYE_MATERIAL" />
     </TresMesh>
 
