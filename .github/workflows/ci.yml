@@ -17,9 +17,29 @@ jobs:
     strategy:
       matrix:
         service: [front, back]
+    # Utilisé uniquement par back (voir back/src/db.test.ts, premier code base
+    # de données du projet) : les `services` ne peuvent pas être conditionnés
+    # par la matrice, le job front paie juste quelques secondes de démarrage
+    # inutilisées.
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: duck
+          POSTGRES_PASSWORD: duck
+          POSTGRES_DB: duck
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U duck -d duck"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         working-directory: ${{ matrix.service }}
+    env:
+      DATABASE_URL: postgres://duck:duck@localhost:5432/duck
     steps:
       - name: Checkout
         uses: actions/checkout@v4
