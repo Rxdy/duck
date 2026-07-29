@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { PLAYER_COLORS } from "../theme.js";
 import {
+  applyTerritoryTint,
   BOARD_PRESETS,
   buildBoardTiles,
   computeIsometricFrame,
   computeTopDownFrame,
+  directionRotationY,
   isWebglAvailable,
+  mixHexColors,
   tileColor,
 } from "./board.js";
 
@@ -119,6 +122,92 @@ describe("tileColor", () => {
     expect(tileColor("empty", "light")).toBe("#33415b");
     expect(tileColor("empty", "dark")).toBe("#28374d");
     expect(tileColor(undefined, "light")).toBe("#33415b");
+  });
+});
+
+describe("directionRotationY", () => {
+  it("faces DOWN (0 rad) by default and when moving down", () => {
+    expect(directionRotationY(0, 1)).toBe(0);
+  });
+
+  it("faces UP (π)", () => {
+    expect(directionRotationY(0, -1)).toBe(Math.PI);
+  });
+
+  it("faces RIGHT (π/2)", () => {
+    expect(directionRotationY(1, 0)).toBe(Math.PI / 2);
+  });
+
+  it("faces LEFT (-π/2)", () => {
+    expect(directionRotationY(-1, 0)).toBe(-Math.PI / 2);
+  });
+});
+
+describe("mixHexColors", () => {
+  it("returns the base color untouched at ratio 0", () => {
+    expect(mixHexColors("#28374d", "#ff4d6d", 0)).toBe("#28374d");
+  });
+
+  it("returns the tint color untouched at ratio 1", () => {
+    expect(mixHexColors("#28374d", "#ff4d6d", 1)).toBe("#ff4d6d");
+  });
+
+  it("blends partway between the two colors", () => {
+    expect(mixHexColors("#000000", "#ffffff", 0.5)).toBe("#808080");
+  });
+});
+
+describe("applyTerritoryTint", () => {
+  const floor = "#28374d";
+  const playerColor = "#ff4d6d";
+
+  it("leaves the floor color untouched with no bases nearby", () => {
+    expect(applyTerritoryTint(floor, 10, 10, [{ x: 0, y: 0, color: playerColor }])).toBe(floor);
+  });
+
+  it("tints a tile within the territory radius", () => {
+    const tinted = applyTerritoryTint(floor, 2, 0, [{ x: 0, y: 0, color: playerColor }]);
+    expect(tinted).not.toBe(floor);
+  });
+
+  it("leaves a tile just outside the radius untouched", () => {
+    expect(applyTerritoryTint(floor, 0, 10, [{ x: 0, y: 0, color: playerColor }])).toBe(floor);
+  });
+
+  it("uses the nearest base's color when two territories overlap", () => {
+    const nearRed = applyTerritoryTint(floor, 1, 0, [
+      { x: 0, y: 0, color: "#ff0000" },
+      { x: 3, y: 0, color: "#0000ff" },
+    ]);
+    const closeToRedOnly = applyTerritoryTint(floor, 1, 0, [{ x: 0, y: 0, color: "#ff0000" }]);
+    expect(nearRed).toBe(closeToRedOnly);
+  });
+
+  it("does not tint through a wall, even within radius (light-like behavior)", () => {
+    const isWall = (x: number, y: number) => x === 1 && y === 0;
+    const tinted = applyTerritoryTint(floor, 2, 0, [{ x: 0, y: 0, color: playerColor }], isWall);
+    expect(tinted).toBe(floor);
+  });
+
+  it("still tints when no wall stands between the tile and the base", () => {
+    const isWall = (x: number, y: number) => x === 5 && y === 5; // ailleurs, hors du chemin
+    const tinted = applyTerritoryTint(floor, 2, 0, [{ x: 0, y: 0, color: playerColor }], isWall);
+    expect(tinted).not.toBe(floor);
+  });
+
+  it("falls back to another base whose line of sight isn't blocked", () => {
+    const isWall = (x: number, y: number) => x === 1 && y === 0; // bloque la base rouge (0,0)
+    const tinted = applyTerritoryTint(
+      floor,
+      2,
+      0,
+      [
+        { x: 0, y: 0, color: "#ff0000" },
+        { x: 2, y: 2, color: "#0000ff" },
+      ],
+      isWall,
+    );
+    expect(tinted).toBe(applyTerritoryTint(floor, 2, 0, [{ x: 2, y: 2, color: "#0000ff" }]));
   });
 });
 

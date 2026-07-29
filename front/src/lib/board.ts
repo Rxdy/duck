@@ -28,6 +28,116 @@ export function tileColor(kind: TileKind | undefined, shade: "light" | "dark"): 
   return shade === "light" ? "#33415b" : "#28374d";
 }
 
+/**
+ * Rotation Y (radians) à appliquer au canard (voir organisms/DuckMesh.vue)
+ * pour qu'il regarde dans la direction du déplacement. Le modèle fait face à
+ * +Z par défaut, qui correspond à "DOWN" (dy > 0) sur le plateau — voir
+ * BoardPreview.vue, où le monde X/Z correspond directement aux cases x/y.
+ * `dx`/`dy` sont toujours -1, 0 ou 1 en pratique (un déplacement = une case),
+ * mais seul leur signe compte ici.
+ */
+export function directionRotationY(dx: number, dy: number): number {
+  if (dx > 0) return Math.PI / 2; // RIGHT
+  if (dx < 0) return -Math.PI / 2; // LEFT
+  if (dy < 0) return Math.PI; // UP
+  return 0; // DOWN (et par défaut si aucun mouvement)
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const normalized = hex.replace("#", "");
+  return [
+    parseInt(normalized.slice(0, 2), 16),
+    parseInt(normalized.slice(2, 4), 16),
+    parseInt(normalized.slice(4, 6), 16),
+  ];
+}
+
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (n: number) => Math.round(n).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+/** Mélange `tint` dans `base` : ratio 0 = base pure, 1 = tint pur. */
+export function mixHexColors(base: string, tint: string, ratio: number): string {
+  const [br, bg, bb] = hexToRgb(base);
+  const [tr, tg, tb] = hexToRgb(tint);
+  return rgbToHex(br + (tr - br) * ratio, bg + (tg - bg) * ratio, bb + (tb - bb) * ratio);
+}
+
+export interface TerritoryBase {
+  x: number;
+  y: number;
+  color: string;
+}
+
+const TERRITORY_RADIUS = 3.5;
+const TERRITORY_STRENGTH = 0.35;
+
+/**
+ * Vrai si un mur coupe la ligne droite entre les deux cases — un territoire
+ * doit se comporter comme une lumière : il ne traverse pas les murs, même à
+ * portée. Tracé de ligne de Bresenham (algorithme standard, entier) : visite
+ * exactement les cases traversées par le segment, sans les approximations
+ * d'un échantillonnage à pas fixe qui pouvait "sauter" une case selon
+ * l'angle. Les deux extrémités ne sont jamais testées (la base elle-même
+ * n'est jamais un mur, ni la case qu'on est en train de colorer).
+ */
+function isLineOfSightBlocked(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  isWall: (x: number, y: number) => boolean,
+): boolean {
+  let x = x0;
+  let y = y0;
+  const dx = Math.abs(x1 - x0);
+  const dy = -Math.abs(y1 - y0);
+  const stepX = x0 < x1 ? 1 : -1;
+  const stepY = y0 < y1 ? 1 : -1;
+  let error = dx + dy;
+
+  while (x !== x1 || y !== y1) {
+    const doubledError = 2 * error;
+    if (doubledError >= dy) {
+      error += dy;
+      x += stepX;
+    }
+    if (doubledError <= dx) {
+      error += dx;
+      y += stepY;
+    }
+    if ((x !== x1 || y !== y1) && isWall(x, y)) return true;
+  }
+  return false;
+}
+
+/**
+ * Teinte une case de sol vers la couleur de la base la plus proche, si elle
+ * est à portée (rayon ~3-4 cases) ET en vue directe (pas de mur entre les
+ * deux, voir isLineOfSightBlocked) : donne un repère visuel de "territoire"
+ * autour de chaque spawn, comme une lumière plutôt qu'un halo qui traverse
+ * tout. Ne s'applique qu'aux cases neutres (mur/spawn gardent leur couleur
+ * propre, voir tileColor) — à l'appelant de filtrer `bases`/la case fournie.
+ */
+export function applyTerritoryTint(
+  floorColor: string,
+  x: number,
+  y: number,
+  bases: TerritoryBase[],
+  isWall: (x: number, y: number) => boolean = () => false,
+): string {
+  let nearest: { distance: number; color: string } | undefined;
+  for (const base of bases) {
+    const distance = Math.hypot(x - base.x, y - base.y);
+    if (distance > TERRITORY_RADIUS) continue;
+    if (nearest && distance >= nearest.distance) continue;
+    if (isLineOfSightBlocked(base.x, base.y, x, y, isWall)) continue;
+    nearest = { distance, color: base.color };
+  }
+  return nearest ? mixHexColors(floorColor, nearest.color, TERRITORY_STRENGTH) : floorColor;
+}
+
 export interface BoardPreset {
   id: string;
   label: string;
