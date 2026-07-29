@@ -67,7 +67,7 @@ Tout cela reste compatible avec un moteur de grille — pas besoin de physique c
 A -------- B
 ```
 
-Le premier joueur à **10 points** gagne.
+Le premier joueur à **5 points** gagne.
 
 ### 2v2 (Duel en équipe)
 
