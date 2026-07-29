@@ -20,4 +20,4 @@ Ce dossier découpe le cahier des charges initial (voir [`../resultat.md`](../re
 
 ## Statut
 
-Squelette du monorepo en place (`apps/client`, `apps/server`, `packages/shared`, `packages/protocol`, `packages/game-engine`, `packages/map-generator`, `packages/editor`), avec CI, lint, tests et Docker. Prochaine étape : continuer l'implémentation en suivant la [roadmap](08-roadmap.md).
+Squelette du projet en place (`front`, `back` — avec le moteur de jeu, le protocole et l'éditeur en interne —, `db`), avec CI, lint, tests et Docker. Prochaine étape : continuer l'implémentation en suivant la [roadmap](08-roadmap.md).

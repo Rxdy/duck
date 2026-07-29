@@ -9,3 +9,6 @@ coverage/
 .DS_Store
 .vite/
 *.tsbuildinfo
+
+# Notes de travail de l'agent (audits, todo, roadmap perso) — jamais commité
+/.perso/
