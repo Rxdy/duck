@@ -3,6 +3,11 @@ import { ref } from "vue";
 import type { Direction } from "../../types.js";
 import { directionForTap } from "../../lib/touchZones.js";
 
+const props = withDefaults(defineProps<{ hapticsEnabled?: boolean; reducedMotion?: boolean }>(), {
+  hapticsEnabled: false,
+  reducedMotion: false,
+});
+
 const emit = defineEmits<{ move: [direction: Direction] }>();
 
 interface Ripple {
@@ -21,6 +26,9 @@ function handleTap(event: MouseEvent) {
   const relY = (event.clientY - rect.top) / rect.height;
 
   emit("move", directionForTap(relX, relY));
+
+  if (props.hapticsEnabled) navigator.vibrate?.(15);
+  if (props.reducedMotion) return;
 
   const id = nextRippleId++;
   ripples.value = [

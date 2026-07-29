@@ -52,4 +52,46 @@ describe("TapZoneControls", () => {
     const wrapper = mount(TapZoneControls);
     expect(wrapper.find("button").exists()).toBe(false);
   });
+
+  it("vibrates on tap when haptics are enabled", async () => {
+    const vibrate = vi.fn();
+    vi.stubGlobal("navigator", { ...navigator, vibrate });
+    const wrapper = mount(TapZoneControls, { props: { hapticsEnabled: true } });
+    mockRect(wrapper.element);
+
+    await wrapper.trigger("click", { clientX: 220, clientY: 100 });
+
+    expect(vibrate).toHaveBeenCalledWith(15);
+    vi.unstubAllGlobals();
+  });
+
+  it("does not vibrate when haptics are disabled (default)", async () => {
+    const vibrate = vi.fn();
+    vi.stubGlobal("navigator", { ...navigator, vibrate });
+    const wrapper = mount(TapZoneControls);
+    mockRect(wrapper.element);
+
+    await wrapper.trigger("click", { clientX: 220, clientY: 100 });
+
+    expect(vibrate).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("skips the ripple animation when reduced motion is enabled", async () => {
+    const wrapper = mount(TapZoneControls, { props: { reducedMotion: true } });
+    mockRect(wrapper.element);
+
+    await wrapper.trigger("click", { clientX: 220, clientY: 100 });
+
+    expect(wrapper.find(".tap-ripple").exists()).toBe(false);
+  });
+
+  it("still shows the ripple animation by default", async () => {
+    const wrapper = mount(TapZoneControls);
+    mockRect(wrapper.element);
+
+    await wrapper.trigger("click", { clientX: 220, clientY: 100 });
+
+    expect(wrapper.find(".tap-ripple").exists()).toBe(true);
+  });
 });
