@@ -28,11 +28,12 @@ const props = withDefaults(
 );
 
 const accessory = computed(() => toAccessoryKind(props.accessory));
-// Ailes légèrement plus sombres que le corps : sans ça, une aile de la même
-// couleur unie que le corps ne se distingue quasiment pas de lui (seul le
-// relief de l'éclairage la sépare), et la silhouette relit comme un simple
-// œuf plutôt qu'un oiseau.
+// Ailes/queue plus sombres et ventre plus clair que le corps : sans ce
+// contraste à deux tons, une forme unie de la même couleur ne se distingue
+// quasiment pas d'elle-même (seul le relief de l'éclairage la sépare), et la
+// silhouette relit comme un simple œuf plutôt qu'un oiseau.
 const wingColor = computed(() => mixHexColors(props.color, "#000000", 0.35));
+const bellyColor = computed(() => mixHexColors(props.color, "#ffffff", 0.45));
 
 const BEAK_COLOR = "#FF9F1C";
 const EYE_COLOR = "#1A1A1A";
@@ -57,21 +58,47 @@ const GOLD_MATERIAL = { roughness: 0.3, metalness: 0.8 };
       <TresMeshStandardMaterial :color="color" v-bind="BODY_MATERIAL" />
     </TresMesh>
 
-    <!-- Ailes : accolées sur les côtés du corps, légèrement vers l'arrière. -->
+    <!-- Ventre : patch clair sous le corps, comme le plumage clair d'un
+         canard sous des ailes plus sombres. -->
     <TresMesh
-      :position="[size * 0.36, -size * 0.08, -size * 0.13]"
-      :scale="[size * 0.08, size * 0.2, size * 0.16]"
+      :position="[0, -size * 0.2, size * 0.05]"
+      :scale="[size * 0.32, size * 0.13, size * 0.38]"
+      receive-shadow
+    >
+      <TresSphereGeometry :args="[1, 16, 12]" />
+      <TresMeshStandardMaterial :color="bellyColor" v-bind="BODY_MATERIAL" />
+    </TresMesh>
+
+    <!-- Ailes : accolées sur les côtés du corps, étirées vers l'arrière comme
+         des ailes repliées plutôt qu'une simple bosse ronde. -->
+    <TresMesh
+      :position="[size * 0.34, -size * 0.06, -size * 0.17]"
+      :rotation="[0, -0.15, 0.08]"
+      :scale="[size * 0.1, size * 0.17, size * 0.24]"
       cast-shadow
     >
       <TresSphereGeometry :args="[1, 12, 10]" />
       <TresMeshStandardMaterial :color="wingColor" v-bind="BODY_MATERIAL" />
     </TresMesh>
     <TresMesh
-      :position="[-size * 0.36, -size * 0.08, -size * 0.13]"
-      :scale="[size * 0.08, size * 0.2, size * 0.16]"
+      :position="[-size * 0.34, -size * 0.06, -size * 0.17]"
+      :rotation="[0, 0.15, -0.08]"
+      :scale="[size * 0.1, size * 0.17, size * 0.24]"
       cast-shadow
     >
       <TresSphereGeometry :args="[1, 12, 10]" />
+      <TresMeshStandardMaterial :color="wingColor" v-bind="BODY_MATERIAL" />
+    </TresMesh>
+
+    <!-- Queue : petite touffe de plumes relevée à l'arrière, signature
+         silhouette du canard vue de profil. -->
+    <TresMesh
+      :position="[0, size * 0.06, -size * 0.56]"
+      :rotation="[-Math.PI / 2 - 0.5, 0, 0]"
+      :scale="[size * 0.13, size * 0.27, size * 0.13]"
+      cast-shadow
+    >
+      <TresConeGeometry :args="[1, 1, 10]" />
       <TresMeshStandardMaterial :color="wingColor" v-bind="BODY_MATERIAL" />
     </TresMesh>
 
