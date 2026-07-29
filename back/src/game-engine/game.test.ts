@@ -18,6 +18,7 @@ function buildState(): GameState {
     id: "p1",
     name: "Duck",
     color: "yellow",
+    accessory: "none",
     x: 0,
     y: 0,
     spawnX: 0,
@@ -57,7 +58,7 @@ describe("applyMove", () => {
     expect(state.players[0]).toMatchObject({ x: 0, y: 0, score: 1 });
   });
 
-  it("resets every player to their own spawn when anyone scores (round ends)", () => {
+  it("only teleports the scorer back to their spawn — everyone else stays put", () => {
     const map: GameMap = {
       width: 3,
       height: 3,
@@ -72,6 +73,7 @@ describe("applyMove", () => {
       id: "p1",
       name: "A",
       color: "red",
+      accessory: "none",
       x: 1,
       y: 2,
       spawnX: 0,
@@ -82,6 +84,7 @@ describe("applyMove", () => {
       id: "p2",
       name: "B",
       color: "blue",
+      accessory: "none",
       x: 2,
       y: 1,
       spawnX: 2,
@@ -96,7 +99,87 @@ describe("applyMove", () => {
     const p2 = state.players.find((p) => p.id === "p2")!;
 
     expect(p1).toMatchObject({ x: 0, y: 0, score: 1 });
-    // p2 n'a pas marqué : score inchangé, mais renvoyé à SON spawn.
-    expect(p2).toMatchObject({ x: 2, y: 0, score: 3 });
+    // p2 n'a pas marqué : ni son score, ni sa position ne changent — la
+    // partie continue pour lui sans interruption.
+    expect(p2).toMatchObject({ x: 2, y: 1, score: 3 });
+  });
+
+  it("blocks movement onto a tile currently occupied by another player", () => {
+    const state = buildState();
+    const bot: Player = {
+      id: "bot",
+      name: "Bot",
+      color: "cyan",
+      accessory: "none",
+      x: 1,
+      y: 0,
+      spawnX: 1,
+      spawnY: 0,
+      score: 0,
+    };
+    state.players.push(bot);
+
+    const next = applyMove(state, "p1", "RIGHT"); // (0,0) -> (1,0), occupé par le bot
+
+    expect(next.players.find((p) => p.id === "p1")).toMatchObject({ x: 0, y: 0 });
+  });
+
+  it("scores by reaching another player's individual base, without any Goal tile", () => {
+    const map: GameMap = {
+      width: 3,
+      height: 1,
+      tiles: [[Tile.Spawn, Tile.Empty, Tile.Spawn]],
+    };
+    const p1: Player = {
+      id: "p1",
+      name: "A",
+      color: "red",
+      accessory: "none",
+      x: 1,
+      y: 0,
+      spawnX: 0,
+      spawnY: 0,
+      score: 0,
+    };
+    const p2: Player = {
+      id: "p2",
+      name: "B",
+      color: "blue",
+      accessory: "none",
+      x: 0,
+      y: 5, // hors de la case visée par p1, juste pour ne pas bloquer le déplacement
+      spawnX: 2,
+      spawnY: 0,
+      score: 0,
+    };
+
+    let state: GameState = { id: "game-1", map, players: [p1, p2] };
+    state = applyMove(state, "p1", "RIGHT"); // (1,0) -> (2,0) = base de p2
+
+    expect(state.players.find((p) => p.id === "p1")).toMatchObject({ x: 0, y: 0, score: 1 });
+  });
+
+  it("does not score when walking back onto your own spawn", () => {
+    const map: GameMap = {
+      width: 2,
+      height: 1,
+      tiles: [[Tile.Spawn, Tile.Empty]],
+    };
+    const player: Player = {
+      id: "p1",
+      name: "A",
+      color: "red",
+      accessory: "none",
+      x: 1,
+      y: 0,
+      spawnX: 0,
+      spawnY: 0,
+      score: 0,
+    };
+
+    let state: GameState = { id: "game-1", map, players: [player] };
+    state = applyMove(state, "p1", "LEFT"); // retour sur SON propre spawn
+
+    expect(state.players[0]).toMatchObject({ x: 0, y: 0, score: 0 });
   });
 });

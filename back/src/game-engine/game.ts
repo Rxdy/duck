@@ -9,7 +9,7 @@ export interface GameState {
   players: Player[];
 }
 
-const DIRECTION_DELTA: Record<Direction, { dx: number; dy: number }> = {
+export const DIRECTION_DELTA: Record<Direction, { dx: number; dy: number }> = {
   UP: { dx: 0, dy: -1 },
   DOWN: { dx: 0, dy: 1 },
   LEFT: { dx: -1, dy: 0 },
@@ -28,18 +28,31 @@ export function applyMove(state: GameState, playerId: string, direction: Directi
     return state;
   }
 
-  const reachedGoal = tileAt(state.map, targetX, targetY) === Tile.Goal;
+  // Un autre joueur (humain ou bot) occupe déjà la case visée : on ne peut
+  // pas le traverser, exactement comme un mur.
+  const blockedByPlayer = state.players.some(
+    (p) => p.id !== playerId && p.x === targetX && p.y === targetY,
+  );
+  if (blockedByPlayer) {
+    return state;
+  }
 
-  if (reachedGoal) {
-    // Un point marqué clôt la manche : tout le monde retourne à son spawn.
-    // Sinon, si un autre joueur arrive sur un but au même moment, il marquerait
-    // aussi juste après alors que la manche est déjà terminée.
+  // Deux façons de marquer : un Goal partagé (mode équipe, une seule base
+  // pour tous) ou la base individuelle d'un autre joueur (Duel/FFA, voir
+  // docs/02-gameplay.md#modes-de-jeu — "chaque joueur possède sa propre
+  // base... entrer sur une base adverse rapporte +1 point").
+  const reachedSharedGoal = tileAt(state.map, targetX, targetY) === Tile.Goal;
+  const reachedEnemyBase = state.players.some(
+    (p) => p.id !== playerId && p.spawnX === targetX && p.spawnY === targetY,
+  );
+
+  if (reachedSharedGoal || reachedEnemyBase) {
+    // Seul le marqueur est renvoyé à son spawn ; les autres restent où ils
+    // sont — la partie continue sans interruption pour eux.
     return {
       ...state,
       players: state.players.map((p) =>
-        p.id === playerId
-          ? { ...p, x: p.spawnX, y: p.spawnY, score: p.score + 1 }
-          : { ...p, x: p.spawnX, y: p.spawnY },
+        p.id === playerId ? { ...p, x: p.spawnX, y: p.spawnY, score: p.score + 1 } : p,
       ),
     };
   }
