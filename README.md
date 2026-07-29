@@ -6,46 +6,45 @@ points.
 
 Documentation complète : [`docs/`](docs/README.md).
 
-## Structure du monorepo
+## Structure du projet
+
+Trois dossiers indépendants à la racine, un par conteneur — pas de monorepo npm workspaces : chacun
+a son propre `package.json`, son propre `node_modules`, sa propre CI.
 
 ```
-apps/
-  client/          React + Vite + Three.js (React Three Fiber)
-  server/          Serveur WebSocket autoritaire (Node.js)
-
-packages/
-  shared/          Types partagés
-  protocol/        Types des messages WebSocket client <-> serveur
-  game-engine/     Règles du jeu (déplacement, collisions, scores) — indépendant du rendu/réseau
-  map-generator/   Génération procédurale de cartes
-  editor/          Logique de l'éditeur de cartes (pure, sans UI)
+front/       React + Vite + Three.js (React Three Fiber) — voir front/README.md
+back/        Serveur WebSocket autoritaire (Node.js) — contient aussi le moteur de jeu, le
+             protocole WebSocket, la génération de cartes et l'éditeur (voir back/src/)
+db/          PostgreSQL (comptes, progression, classement) — pas de code, voir db/README.md
 ```
+
+Le client (`front/`) ne partage aucun code TypeScript avec le serveur : il ne connaît que le
+protocole WebSocket (types dupliqués localement dans `front/src/types.ts`).
 
 ## Démarrer en local
 
 Prérequis : Node.js 22+.
 
 ```bash
-npm install
-npm run dev:server   # serveur WebSocket sur :8080
-npm run dev:client   # client Vite sur :5173
+cd back && npm install && npm run dev    # serveur WebSocket sur :8080
+cd front && npm install && npm run dev   # client Vite sur :5173
 ```
 
-Ou via Docker Compose :
+Ou via Docker Compose (démarre aussi PostgreSQL) :
 
 ```bash
 docker compose up --build
 ```
 
-## Scripts
+## Scripts (identiques dans `front/` et `back/`)
 
 | Commande | Rôle |
 |---|---|
-| `npm run lint` | ESLint sur tout le monorepo |
+| `npm run lint` | ESLint |
 | `npm run format` | Vérifie le formatage Prettier |
-| `npm run typecheck` | Vérification TypeScript de tous les packages |
-| `npm test` | Tests unitaires (Vitest) de tous les packages |
-| `npm run build` | Build de tous les packages/apps |
+| `npm run typecheck` | Vérification TypeScript |
+| `npm test` | Tests unitaires (Vitest) — `back/` uniquement pour l'instant |
+| `npm run build` | Build de prod — `front/` uniquement pour l'instant |
 
 ## Workflow Git
 
@@ -60,4 +59,4 @@ les règles de protection GitHub côté serveur sont la garantie principale.
 ## CI
 
 Chaque push et pull request sur `main`/`dev` déclenche `.github/workflows/ci.yml` : lint, format,
-typecheck, tests et build.
+typecheck, tests et build, exécutés séparément pour `front/` et `back/`.
