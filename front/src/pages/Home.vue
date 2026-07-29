@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { PLAYER_COLORS } from "../theme.js";
 import MenuCard from "../components/molecules/MenuCard.vue";
+import { useAuthStore } from "../store/authStore.js";
+
+const auth = useAuthStore();
 
 const menu = [
   { to: "/jouer", label: "Jouer", desc: "Rejoins une partie ou choisis un mode" },
@@ -52,6 +55,17 @@ function hideOnError(event: Event) {
           :accent="PLAYER_COLORS[index % PLAYER_COLORS.length]!"
         />
       </nav>
+
+      <p v-if="auth.isLoggedIn" class="text-sm text-white/50">
+        Connecté en tant que
+        <span class="font-semibold text-white/80">{{ auth.session!.username }}</span> ·
+        <button type="button" class="text-cyan-400" @click="auth.logout()">Déconnexion</button>
+      </p>
+      <p v-else class="text-sm text-white/50">
+        <RouterLink to="/inscription" class="text-cyan-400">S'inscrire</RouterLink>
+        ·
+        <RouterLink to="/connexion" class="text-white/60">Se connecter</RouterLink>
+      </p>
     </div>
   </div>
 </template>

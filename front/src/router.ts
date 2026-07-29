@@ -24,6 +24,9 @@ const router = createRouter({
         },
         { path: "credits", name: "credits", component: () => import("./pages/Credits.vue") },
         { path: "options", name: "options", component: () => import("./pages/Options.vue") },
+        { path: "inscription", name: "sign-up", component: () => import("./pages/SignUp.vue") },
+        { path: "connexion", name: "login", component: () => import("./pages/Login.vue") },
+        { path: "compte", name: "account", component: () => import("./pages/Account.vue") },
         {
           path: "canard",
           name: "duck-profile",
