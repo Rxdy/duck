@@ -6,7 +6,9 @@ import {
   playableLabel,
   spawnColor,
   toPlacedTiles,
+  toWireSpawns,
   toWireTiles,
+  wireTileToKind,
 } from "./mapEditor.js";
 import { PLAYER_COLORS } from "../theme.js";
 
@@ -115,6 +117,40 @@ describe("toWireTiles", () => {
 
     expect(wire[1]![1]).toBe("Spawn");
     expect(wire[1]![2]).toBe("Spawn");
+  });
+});
+
+describe("wireTileToKind", () => {
+  it("recognizes walls", () => {
+    expect(wireTileToKind("Wall")).toBe("wall");
+  });
+
+  it("falls back to empty for anything without a distinct front-end rendering (Spawn/Goal/Water/Bonus/Empty)", () => {
+    expect(wireTileToKind("Empty")).toBe("empty");
+    expect(wireTileToKind("Spawn")).toBe("empty");
+    expect(wireTileToKind("Goal")).toBe("empty");
+    expect(wireTileToKind("Water")).toBe("empty");
+    expect(wireTileToKind("Bonus")).toBe("empty");
+  });
+});
+
+describe("toWireSpawns", () => {
+  it("orders spawns by color (spawn-0 first), regardless of placement order", () => {
+    let map = createEmptyMap(6, 6);
+    map = placeTile(map, 4, 1, "spawn-1");
+    map = placeTile(map, 1, 1, "spawn-0"); // posé après spawn-1, mais doit rester en 1er
+
+    expect(toWireSpawns(map)).toEqual([
+      { x: 1, y: 1 },
+      { x: 4, y: 1 },
+    ]);
+  });
+
+  it("skips colors that haven't been placed", () => {
+    let map = createEmptyMap(6, 6);
+    map = placeTile(map, 2, 2, "spawn-2");
+
+    expect(toWireSpawns(map)).toEqual([{ x: 2, y: 2 }]);
   });
 });
 

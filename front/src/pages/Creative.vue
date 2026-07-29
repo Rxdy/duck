@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { BOARD_PRESETS } from "../lib/board.js";
 import { countSpawns, placeTile, playableLabel, toPlacedTiles } from "../lib/mapEditor.js";
 import { loadSavedMaps, persistSavedMaps, upsertMap } from "../lib/savedMaps.js";
+import { exportMapToServer } from "../lib/mapExport.js";
 import { useCreativeEditorStore } from "../store/creativeEditorStore.js";
 import { useTestSessionStore } from "../store/testSessionStore.js";
 import AppButton from "../components/atoms/AppButton.vue";
@@ -38,9 +39,19 @@ function handleTest() {
   router.push("/creatif/test");
 }
 
-// Sauvegarde en local (pas de comptes/serveur pour l'instant, voir docs) : un
-// nom + un UUID pour pouvoir la retrouver et la modifier plus tard, depuis la
-// page /creatif/cartes.
+// Repart d'une carte vide à la taille actuellement sélectionnée : détache
+// aussi de la carte sauvegardée en cours (currentMapId/mapName), sinon un
+// "Sauvegarder" après reset écraserait l'ancienne carte avec du vide.
+function handleReset() {
+  const preset = BOARD_PRESETS.find((p) => p.id === editor.selectedId)!;
+  editor.resetForSize(preset.id, preset.width, preset.height);
+  notify("Carte réinitialisée.");
+}
+
+// Sauvegarde en local (localStorage) : un nom + un UUID pour pouvoir la
+// retrouver et la modifier plus tard, depuis la page /creatif/cartes.
+// Envoyée en plus au serveur (back/maps/, catégorie du preset actuel) pour
+// pouvoir être reprise plus tard comme carte par défaut.
 function handleSave() {
   const { maps, saved } = upsertMap(loadSavedMaps(), {
     id: editor.currentMapId,
@@ -51,6 +62,9 @@ function handleSave() {
   editor.currentMapId = saved.id;
   editor.mapName = saved.name;
   notify(`Carte "${saved.name}" sauvegardée (${saved.id}).`);
+
+  const preset = BOARD_PRESETS.find((p) => p.id === editor.selectedId);
+  if (preset) void exportMapToServer(saved, preset.category);
 }
 
 function loadMapById(id: string) {
@@ -117,6 +131,7 @@ onMounted(() => {
       <AppButton class="flex-1" @click="handleTest">Tester</AppButton>
       <AppButton class="flex-1" @click="handleSave">Sauvegarder</AppButton>
     </div>
+    <AppButton @click="handleReset">Réinitialiser</AppButton>
     <p v-if="notice" class="text-center text-xs text-amber-400">{{ notice }}</p>
   </div>
 </template>

@@ -39,4 +39,10 @@ describe("SavedMapsList", () => {
     await wrapper.get('button[aria-label="Supprimer"]').trigger("click");
     expect(wrapper.emitted("delete")).toEqual([["a"]]);
   });
+
+  it("emits export when the export button is clicked", async () => {
+    const wrapper = mount(SavedMapsList, { props: { maps } });
+    await wrapper.get('button[aria-label="Exporter"]').trigger("click");
+    expect(wrapper.emitted("export")).toEqual([["a"]]);
+  });
 });

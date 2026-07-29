@@ -2,7 +2,7 @@
 import type { SavedMap } from "../../lib/savedMaps.js";
 
 defineProps<{ maps: SavedMap[]; activeId?: string }>();
-defineEmits<{ load: [id: string]; delete: [id: string] }>();
+defineEmits<{ load: [id: string]; delete: [id: string]; export: [id: string] }>();
 </script>
 
 <template>
@@ -16,6 +16,14 @@ defineEmits<{ load: [id: string]; delete: [id: string] }>();
       <button type="button" class="flex-1 text-left" @click="$emit('load', m.id)">
         <span class="font-semibold">{{ m.name }}</span>
         <span class="text-white/40"> · {{ m.width }}×{{ m.height }}</span>
+      </button>
+      <button
+        type="button"
+        aria-label="Exporter"
+        class="px-1 text-white/40"
+        @click="$emit('export', m.id)"
+      >
+        ⬇
       </button>
       <button
         type="button"
