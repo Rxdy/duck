@@ -2,7 +2,7 @@
 import ModeCard from "../components/molecules/ModeCard.vue";
 
 const modes = [
-  { key: "duel", label: "Duel", desc: "2 joueurs, premier à 10 points", ready: true },
+  { key: "duel", label: "Duel", desc: "2 joueurs, premier à 5 points", ready: true },
   {
     key: "2v2",
     label: "2v2",
