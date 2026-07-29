@@ -28,7 +28,13 @@ export function tileColor(kind: TileKind | undefined, shade: "light" | "dark"): 
   return shade === "light" ? "#33415b" : "#28374d";
 }
 
-export type Facing = "up" | "down" | "left" | "right";
+/**
+ * Les 4 directions de déplacement (voir directionFacing) nommées comme
+ * elles se voient réellement à l'écran une fois passées par la caméra
+ * isométrique (voir computeIsometricFrame) — RIGHT/DOWN/LEFT/UP en case de
+ * plateau, mais SE/SW/NW/NE une fois affichées en diagonale à l'écran.
+ */
+export type Facing = "ne" | "nw" | "se" | "sw";
 
 /**
  * Direction affichée par le canard (voir organisms/DuckSprite.vue) : le
@@ -39,10 +45,10 @@ export type Facing = "up" | "down" | "left" | "right";
  * déplacement, mais évite de forcer une face par défaut arbitraire).
  */
 export function directionFacing(dx: number, dy: number): Facing | undefined {
-  if (dx > 0) return "right";
-  if (dx < 0) return "left";
-  if (dy > 0) return "down";
-  if (dy < 0) return "up";
+  if (dx > 0) return "se";
+  if (dx < 0) return "nw";
+  if (dy > 0) return "sw";
+  if (dy < 0) return "ne";
   return undefined;
 }
 

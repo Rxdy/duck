@@ -70,14 +70,14 @@ export function drawDuckSprite(color: string, accessory: AccessoryKind, view: Du
 
 /** Vue de dos : silhouette symétrique, sans visage (RIGHT et UP n'en montrent aucun). */
 function drawBack(ctx: CanvasRenderingContext2D, color: string, accessory: AccessoryKind): void {
-  const wingColor = mixHexColors(color, "#000000", 0.08);
+  const wingColor = mixHexColors(color, "#000000", 0.22);
   const wingHighlight = mixHexColors(color, "#ffffff", 0.4);
 
   // Pattes, derrière le corps.
-  outlinedRect(ctx, 15, 36, 4, 8, BEAK_COLOR);
-  outlinedRect(ctx, 31, 36, 4, 8, BEAK_COLOR);
-  outlinedRect(ctx, 12, 43, 8, 4, BEAK_COLOR);
-  outlinedRect(ctx, 28, 43, 8, 4, BEAK_COLOR);
+  outlinedRect(ctx, 15, 38, 4, 10, BEAK_COLOR);
+  outlinedRect(ctx, 31, 38, 4, 10, BEAK_COLOR);
+  outlinedRect(ctx, 12, 46, 8, 4, BEAK_COLOR);
+  outlinedRect(ctx, 28, 46, 8, 4, BEAK_COLOR);
 
   // Corps + tête, centrés (symétrique gauche/droite).
   fillEllipse(ctx, 25, 32, 15 + OUTLINE, 10.5 + OUTLINE, "#000000");
@@ -96,13 +96,13 @@ function drawBack(ctx: CanvasRenderingContext2D, color: string, accessory: Acces
 
 /** Vue "qui s'approche" (RIGHT, miroir pour DOWN) : la pose "3/4" reconnaissable, un seul œil visible. */
 function drawApproach(ctx: CanvasRenderingContext2D, color: string, accessory: AccessoryKind): void {
-  const wingColor = mixHexColors(color, "#000000", 0.08);
+  const wingColor = mixHexColors(color, "#000000", 0.22);
   const wingHighlight = mixHexColors(color, "#ffffff", 0.4);
 
-  outlinedRect(ctx, 14, 34, 4, 8, BEAK_COLOR);
-  outlinedRect(ctx, 30, 34, 4, 8, BEAK_COLOR);
-  outlinedRect(ctx, 11, 41, 8, 4, BEAK_COLOR);
-  outlinedRect(ctx, 27, 41, 8, 4, BEAK_COLOR);
+  outlinedRect(ctx, 14, 37, 4, 10, BEAK_COLOR);
+  outlinedRect(ctx, 30, 37, 4, 10, BEAK_COLOR);
+  outlinedRect(ctx, 11, 45, 8, 4, BEAK_COLOR);
+  outlinedRect(ctx, 27, 45, 8, 4, BEAK_COLOR);
 
   fillEllipse(ctx, 23, 32, 12.9 + OUTLINE, 10.2 + OUTLINE, "#000000");
   fillEllipse(ctx, 22, 12, 10.2 + OUTLINE, 10.2 + OUTLINE, "#000000");
@@ -125,9 +125,11 @@ function drawApproach(ctx: CanvasRenderingContext2D, color: string, accessory: A
   ctx.fillStyle = BEAK_DARK;
   ctx.fillRect(33, 23.5, 13, 1.6);
 
-  outlinedEllipse(ctx, 27, 17.5, 5.2, 5.3, EYE_BLACK);
-  fillEllipse(ctx, 25.5, 19.5, 2.1, 1.9, "#F2F2F2");
-  fillEllipse(ctx, 29.5, 14.5, 1, 1.4, "#F2F2F2");
+  // Œil : blanc + pupille (pas l'inverse) — un socle entièrement noir avec
+  // un seul reflet lit comme un œil mort/vitreux plutôt qu'expressif.
+  outlinedEllipse(ctx, 27, 17.5, 4.8, 5, "#FFFFFF");
+  fillEllipse(ctx, 28.1, 18.6, 2.6, 2.8, EYE_BLACK);
+  fillEllipse(ctx, 27, 16.7, 0.9, 1, "#FFFFFF");
 
   drawAccessory(ctx, accessory, 22, 12);
 }

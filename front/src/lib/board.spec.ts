@@ -126,18 +126,18 @@ describe("tileColor", () => {
 });
 
 describe("directionFacing", () => {
-  it("faces right/left on horizontal movement", () => {
-    expect(directionFacing(1, 0)).toBe("right");
-    expect(directionFacing(-1, 0)).toBe("left");
+  it("faces SE/NW on horizontal movement (RIGHT/LEFT on the grid)", () => {
+    expect(directionFacing(1, 0)).toBe("se");
+    expect(directionFacing(-1, 0)).toBe("nw");
   });
 
-  it("faces down/up on vertical movement", () => {
-    expect(directionFacing(0, 1)).toBe("down");
-    expect(directionFacing(0, -1)).toBe("up");
+  it("faces SW/NE on vertical movement (DOWN/UP on the grid)", () => {
+    expect(directionFacing(0, 1)).toBe("sw");
+    expect(directionFacing(0, -1)).toBe("ne");
   });
 
   it("prioritizes horizontal over vertical if somehow both are set", () => {
-    expect(directionFacing(1, 1)).toBe("right");
+    expect(directionFacing(1, 1)).toBe("se");
   });
 
   it("returns undefined when there is no movement at all", () => {
