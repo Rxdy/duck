@@ -88,9 +88,10 @@ export function playableLabel(spawnCount: number): string {
 /**
  * Convertit la matrice de l'éditeur vers le format attendu par le serveur
  * (valeurs de l'enum Tile de back/src/game-engine/tile.ts). Les 4 couleurs de
- * spawn sont fusionnées en un seul "Spawn" générique : pour l'entraînement
- * solo, le serveur n'a pas besoin de savoir à quel joueur/couleur il
- * correspondait dans l'éditeur.
+ * spawn sont fusionnées en un seul "Spawn" générique : le serveur n'a pas
+ * besoin de connaître la couleur pour faire marcher le jeu (murs, collisions,
+ * bases). L'ordre des couleurs est transmis séparément par `toWireSpawns` pour
+ * que le joueur qui apparaît sur un spawn ait bien la couleur de ce spawn.
  */
 export function toWireTiles(map: EditorMap): string[][] {
   return map.tiles.map((row) =>
@@ -100,4 +101,35 @@ export function toWireTiles(map: EditorMap): string[][] {
       return "Empty";
     }),
   );
+}
+
+/**
+ * Position de chaque spawn posé, dans l'ordre des couleurs (spawn-0, puis
+ * spawn-1...), sans les couleurs non utilisées. Le serveur assigne les
+ * joueurs dans cet ordre pour que la couleur du canard corresponde à la
+ * couleur du spawn sur lequel il apparaît (voir back/src/room.ts).
+ */
+export function toWireSpawns(map: EditorMap): { x: number; y: number }[] {
+  const spawns: { x: number; y: number }[] = [];
+  for (const kind of SPAWN_KINDS) {
+    map.tiles.forEach((row, y) => {
+      row.forEach((cell, x) => {
+        if (cell === kind) spawns.push({ x, y });
+      });
+    });
+  }
+  return spawns;
+}
+
+/**
+ * Sens inverse de toWireTiles : convertit une valeur de l'enum Tile envoyée
+ * par le serveur (voir back/src/protocol.ts#MapMessage, mode "Jouer") vers un
+ * TileKind affichable. Le serveur ne transmet pas la couleur d'un spawn (il
+ * ne la connaît pas lui-même, voir toWireTiles) : la base d'un joueur se
+ * distingue visuellement via le halo de territoire (lib/board.ts), pas via
+ * la couleur de la case elle-même, donc "Spawn"/"Goal"/"Water"/"Bonus"
+ * retombent tous sur "empty" pour l'instant (seul le mur est distinct).
+ */
+export function wireTileToKind(value: string): TileKind {
+  return value === "Wall" ? "wall" : "empty";
 }
