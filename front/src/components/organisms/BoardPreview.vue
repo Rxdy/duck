@@ -3,19 +3,35 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { OrthographicCamera, Plane, Raycaster, Vector2, Vector3 } from "three";
 import { TresCanvas } from "@tresjs/core";
 import {
+  applyTerritoryTint,
   buildBoardTiles,
   computeIsometricFrame,
   computeTopDownFrame,
+  directionRotationY,
   isWebglAvailable,
   tileColor,
+  type TerritoryBase,
 } from "../../lib/board.js";
 import type { TileKind } from "../../lib/mapEditor.js";
+import DuckMesh from "./DuckMesh.vue";
 
 const props = withDefaults(
   defineProps<{
     width: number;
     height: number;
-    players?: { id: string; x: number; y: number; color: string }[];
+    players?: {
+      id: string;
+      x: number;
+      y: number;
+      color: string;
+      // Accessoire cosmétique équipé (voir lib/duckAccessories.ts). Absent
+      // -> aucun accessoire affiché (bot, joueur non connecté...).
+      accessory?: string;
+      // Position de la base du joueur : sert à teinter le sol alentour
+      // (voir applyTerritoryTint). Absent -> pas de territoire affiché.
+      spawnX?: number;
+      spawnY?: number;
+    }[];
     // "isometric" pour une partie en cours (rendu), "topDown" pour l'éditeur
     // (placement précis des éléments, voir docs/04-editeur-cartes.md).
     mode?: "isometric" | "topDown";
@@ -36,15 +52,48 @@ const FLOOR_HEIGHT = 0.25;
 // dessus/en isométrique : on reste sous sa taille, ici la moitié.
 const WALL_HEIGHT = DUCK_SIZE / 2;
 
+const territoryBases = computed<TerritoryBase[]>(
+  () =>
+    props.players
+      ?.filter(
+        (p): p is typeof p & { spawnX: number; spawnY: number } =>
+          Number.isFinite(p.spawnX) && Number.isFinite(p.spawnY),
+      )
+      .map((p) => ({ x: p.spawnX, y: p.spawnY, color: p.color })) ?? [],
+);
+
 const renderTiles = computed(() => {
   const overrides = new Map(props.tiles?.map((t) => [`${t.x},${t.y}`, t.kind]));
+  const isWallAt = (x: number, y: number) => overrides.get(`${x},${y}`) === "wall";
+
   return buildBoardTiles(props.width, props.height).map((t) => {
     const kind = overrides.get(`${t.x},${t.y}`);
     const height = kind === "wall" ? WALL_HEIGHT : FLOOR_HEIGHT;
+    const baseColor = tileColor(kind, t.shade);
+    // Le territoire ne doit pas recolorer un mur ou un spawn : seules les
+    // cases neutres (pas de kind, ou "empty") en reçoivent la teinte.
+    const isNeutralFloor = kind === undefined || kind === "empty";
+
+    // En partie réelle (voir Game.vue), le serveur ne transmet qu'un "Spawn"
+    // générique sans couleur (mapEditor.ts#wireTileToKind) : la case exacte
+    // à toucher pour marquer serait donc invisible sans ça. On la peint dans
+    // la couleur pleine du joueur, exactement comme le fait déjà l'éditeur
+    // pour ses tuiles "spawn-N" — le halo de territoire, lui, reste réservé
+    // aux cases alentour.
+    const exactBase = isNeutralFloor
+      ? territoryBases.value.find((b) => b.x === t.x && b.y === t.y)
+      : undefined;
+
+    const color = exactBase
+      ? exactBase.color
+      : isNeutralFloor && territoryBases.value.length > 0
+        ? applyTerritoryTint(baseColor, t.x, t.y, territoryBases.value, isWallAt)
+        : baseColor;
+
     return {
       x: t.x,
       y: t.y,
-      color: tileColor(kind, t.shade),
+      color,
       height,
       // Toutes les cases partagent la même base (-FLOOR_HEIGHT) : un mur pousse
       // vers le haut depuis le sol au lieu de flotter ou d'être enterré.
@@ -52,6 +101,29 @@ const renderTiles = computed(() => {
     };
   });
 });
+
+// Direction actuellement affichée par chaque canard (voir DuckMesh.vue, qui
+// fait toujours face à +Z localement) : comparée à la position précédente à
+// chaque mise à jour, pour ne pivoter que quand le joueur bouge réellement
+// et garder la dernière direction affichée le reste du temps (immobile ne
+// doit pas remettre le canard face à "DOWN").
+const facingByPlayerId = ref(new Map<string, number>());
+const lastPositionByPlayerId = new Map<string, { x: number; y: number }>();
+watch(
+  () => props.players,
+  (players) => {
+    for (const p of players ?? []) {
+      const last = lastPositionByPlayerId.get(p.id);
+      if (!last) {
+        facingByPlayerId.value.set(p.id, 0);
+      } else if (last.x !== p.x || last.y !== p.y) {
+        facingByPlayerId.value.set(p.id, directionRotationY(p.x - last.x, p.y - last.y));
+      }
+      lastPositionByPlayerId.set(p.id, { x: p.x, y: p.y });
+    }
+  },
+  { deep: true, immediate: true },
+);
 
 // Certains navigateurs/webviews ne peuvent créer aucun contexte WebGL : on le
 // vérifie avant de monter TresCanvas pour éviter un crash silencieux (voir
@@ -131,27 +203,32 @@ function handleClick(event: MouseEvent) {
 
 <template>
   <div ref="containerRef" class="h-full w-full" @click="handleClick">
-    <TresCanvas v-if="webglAvailable" :camera="camera">
-      <TresAmbientLight :intensity="0.8" />
-      <TresDirectionalLight :position="[10, 20, 10]" :intensity="0.7" />
+    <TresCanvas v-if="webglAvailable" :camera="camera" shadows>
+      <!-- Une ambiante trop forte aplatit tout (chaque face reçoit la même
+           lumière peu importe son orientation) : baissée au profit d'une
+           directionnelle plus marquée + son ombre portée, qui sont ce qui
+           donne réellement une impression de volume. -->
+      <TresAmbientLight :intensity="0.35" />
+      <TresDirectionalLight :position="[10, 20, 10]" :intensity="1.3" cast-shadow />
 
       <TresMesh
         v-for="tile in renderTiles"
         :key="`${tile.x}-${tile.y}`"
         :position="[tile.x + 0.5, tile.centerY, tile.y + 0.5]"
+        receive-shadow
       >
         <TresBoxGeometry :args="[TILE_SIZE, tile.height, TILE_SIZE]" />
         <TresMeshStandardMaterial :color="tile.color" />
       </TresMesh>
 
-      <TresMesh
+      <TresGroup
         v-for="player in props.players ?? []"
         :key="player.id"
         :position="[player.x + 0.5, DUCK_SIZE / 2, player.y + 0.5]"
+        :rotation="[0, facingByPlayerId.get(player.id) ?? 0, 0]"
       >
-        <TresBoxGeometry :args="[DUCK_SIZE, DUCK_SIZE, DUCK_SIZE]" />
-        <TresMeshStandardMaterial :color="player.color" />
-      </TresMesh>
+        <DuckMesh :color="player.color" :accessory="player.accessory" :size="DUCK_SIZE" />
+      </TresGroup>
     </TresCanvas>
 
     <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
