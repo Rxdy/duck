@@ -6,7 +6,7 @@ import {
   buildBoardTiles,
   computeIsometricFrame,
   computeTopDownFrame,
-  directionRotationY,
+  directionFacing,
   isWebglAvailable,
   mixHexColors,
   tileColor,
@@ -125,21 +125,23 @@ describe("tileColor", () => {
   });
 });
 
-describe("directionRotationY", () => {
-  it("faces DOWN (0 rad) by default and when moving down", () => {
-    expect(directionRotationY(0, 1)).toBe(0);
+describe("directionFacing", () => {
+  it("faces right/left on horizontal movement", () => {
+    expect(directionFacing(1, 0)).toBe("right");
+    expect(directionFacing(-1, 0)).toBe("left");
   });
 
-  it("faces UP (π)", () => {
-    expect(directionRotationY(0, -1)).toBe(Math.PI);
+  it("faces down/up on vertical movement", () => {
+    expect(directionFacing(0, 1)).toBe("down");
+    expect(directionFacing(0, -1)).toBe("up");
   });
 
-  it("faces RIGHT (π/2)", () => {
-    expect(directionRotationY(1, 0)).toBe(Math.PI / 2);
+  it("prioritizes horizontal over vertical if somehow both are set", () => {
+    expect(directionFacing(1, 1)).toBe("right");
   });
 
-  it("faces LEFT (-π/2)", () => {
-    expect(directionRotationY(-1, 0)).toBe(-Math.PI / 2);
+  it("returns undefined when there is no movement at all", () => {
+    expect(directionFacing(0, 0)).toBeUndefined();
   });
 });
 

@@ -26,7 +26,12 @@ export function accessoryLabel(accessory: AccessoryKind): string {
   }
 }
 
-/** Icône affichée dans le sélecteur (voir pages/DuckProfile.vue) — le vrai rendu utilise DuckMesh.vue. */
+/**
+ * Icône affichée dans le sélecteur (voir pages/DuckProfile.vue). Pas encore
+ * de rendu visuel de l'accessoire sur le personnage en jeu (voir
+ * BoardPreview.vue, revenu à un simple cube coloré) : à rebrancher une fois
+ * qu'un vrai visuel de personnage existe.
+ */
 export function accessoryIcon(accessory: AccessoryKind): string {
   switch (accessory) {
     case "top-hat":
