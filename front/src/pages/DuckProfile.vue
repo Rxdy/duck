@@ -40,17 +40,17 @@ async function handleEquip(skinId: string) {
   <div class="flex h-full flex-col items-center gap-6 overflow-y-auto px-4 py-6 text-center">
     <h1 class="text-2xl font-bold">Mon canard</h1>
 
-    <p v-if="!auth.isLoggedIn" class="text-white/60">
+    <p v-if="!auth.isLoggedIn" class="text-ink/60">
       <RouterLink to="/connexion" class="text-cyan-400">Connecte-toi</RouterLink>
       pour gérer les skins de ton canard.
     </p>
 
     <template v-else>
-      <div class="h-40 w-40 shrink-0 overflow-hidden rounded-xl bg-slate-900">
+      <div class="h-40 w-40 shrink-0 overflow-hidden rounded-xl bg-surface">
         <BoardPreview :width="1" :height="1" :players="previewPlayers" />
       </div>
 
-      <p class="text-white/60">
+      <p class="text-ink/60">
         Un skin est un accessoire porté par ton canard — un seul équipé à la fois.
       </p>
 
@@ -60,12 +60,12 @@ async function handleEquip(skinId: string) {
           :key="skin.id"
           type="button"
           class="flex flex-col items-center gap-1 rounded-lg px-3 py-2 transition"
-          :class="skin.equipped ? 'bg-white/10' : ''"
+          :class="skin.equipped ? 'bg-ink/10' : ''"
           :disabled="equipping === skin.id"
           @click="handleEquip(skin.id)"
         >
           <span class="text-3xl">{{ accessoryIcon(toAccessoryKind(skin.accessory)) }}</span>
-          <span class="text-xs text-white/60">{{ skin.name }}</span>
+          <span class="text-xs text-ink/60">{{ skin.name }}</span>
         </button>
       </div>
     </template>
