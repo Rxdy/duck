@@ -25,9 +25,10 @@ describe("parseImportedMap", () => {
     });
   });
 
-  it("always generates a fresh id, never reusing the source file's id", () => {
-    const result = parseImportedMap(validRaw)!;
-    expect(result.id).not.toBe("original-id");
+  it("ne reprend jamais l'identité de la carte d'origine", () => {
+    // L'import crée une nouvelle carte sur le compte, dont l'id vient du
+    // serveur : réimporter le même fichier ne peut donc rien écraser.
+    expect(parseImportedMap(validRaw)).not.toHaveProperty("id");
   });
 
   it("rejects null, non-objects, or missing required fields", () => {
