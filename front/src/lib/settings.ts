@@ -2,6 +2,9 @@ import type { Direction } from "../types.js";
 
 export type KeyBindings = Record<Direction, string>;
 
+/** Thème de l'interface (voir src/style.css pour les deux palettes). */
+export type Theme = "dark" | "light";
+
 export interface Settings {
   musicVolume: number;
   sfxVolume: number;
@@ -9,6 +12,7 @@ export interface Settings {
   hapticsEnabled: boolean;
   reducedMotion: boolean;
   colorblindMode: boolean;
+  theme: Theme;
 }
 
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
@@ -25,6 +29,9 @@ export const DEFAULT_SETTINGS: Settings = {
   hapticsEnabled: true,
   reducedMotion: false,
   colorblindMode: false,
+  // Sombre par défaut : c'est ce que voit un nouveau venu avant même que ses
+  // réglages soient lus, et le jeu a été dessiné comme ça.
+  theme: "dark",
 };
 
 function clampVolume(value: unknown, fallback: number): number {
@@ -65,6 +72,7 @@ export function parseSettings(raw: unknown): Settings {
       typeof r.reducedMotion === "boolean" ? r.reducedMotion : DEFAULT_SETTINGS.reducedMotion,
     colorblindMode:
       typeof r.colorblindMode === "boolean" ? r.colorblindMode : DEFAULT_SETTINGS.colorblindMode,
+    theme: r.theme === "light" || r.theme === "dark" ? r.theme : DEFAULT_SETTINGS.theme,
   };
 }
 

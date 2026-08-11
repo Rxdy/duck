@@ -17,13 +17,13 @@ const CORNERS = [
     v-for="(player, index) in players.slice(0, 4)"
     :key="player.id"
     :data-corner="CORNERS[index]!.name"
-    class="absolute z-10 flex flex-col gap-0.5 rounded-lg bg-slate-900/80 px-3 py-1.5"
+    class="absolute z-10 flex flex-col gap-0.5 rounded-lg border border-ink/10 bg-surface/80 px-3 py-1.5"
     :class="CORNERS[index]!.classes"
   >
     <span class="flex items-center gap-1.5 text-xs font-semibold" :style="{ color: player.color }">
       <span class="h-2.5 w-2.5 shrink-0 rounded-full" :style="{ backgroundColor: player.color }" />
       {{ player.name }}
     </span>
-    <span class="text-lg font-bold text-white">{{ player.score }}</span>
+    <span class="text-lg font-bold text-ink">{{ player.score }}</span>
   </div>
 </template>

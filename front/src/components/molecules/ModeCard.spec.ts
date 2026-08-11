@@ -9,21 +9,22 @@ const router = createRouter({
 });
 
 describe("ModeCard", () => {
-  it("shows a Jouer link to /jeu when ready", () => {
+  it("shows a Jouer link carrying the mode when ready", () => {
     const wrapper = mount(ModeCard, {
-      props: { label: "Duel", description: "2 joueurs", ready: true },
+      props: { label: "FFA 3 joueurs", description: "1v1v1", ready: true, to: "/jeu?mode=ffa3" },
       global: { plugins: [router] },
     });
 
-    expect(wrapper.text()).toContain("Duel");
+    expect(wrapper.text()).toContain("FFA 3 joueurs");
     expect(wrapper.findComponent(RouterLink).exists()).toBe(true);
-    expect(wrapper.findComponent(RouterLink).props("to")).toBe("/jeu");
+    // Le mode voyage dans l'URL : sans lui, tous les modes lanceraient un duel.
+    expect(wrapper.findComponent(RouterLink).props("to")).toBe("/jeu?mode=ffa3");
     expect(wrapper.text()).not.toContain("Bientôt");
   });
 
   it("shows a disabled Bientôt badge and no link when not ready", () => {
     const wrapper = mount(ModeCard, {
-      props: { label: "2v2", description: "4 joueurs", ready: false },
+      props: { label: "2v2", description: "4 joueurs", ready: false, to: "/jeu?mode=2v2" },
       global: { plugins: [router] },
     });
 

@@ -14,10 +14,10 @@ const emit = defineEmits<{ click: [] }>();
 
 const classes = computed(() => {
   const base = "rounded-lg px-4 py-2 text-sm font-semibold transition active:scale-95";
-  if (props.disabled) return `${base} bg-white/10 text-white/40`;
+  if (props.disabled) return `${base} bg-ink/10 text-ink/40`;
   return props.variant === "primary"
     ? `${base} bg-cyan-500 text-slate-950`
-    : `${base} bg-white/10 text-white/70`;
+    : `${base} bg-ink/10 text-ink/70`;
 });
 
 function onClick() {

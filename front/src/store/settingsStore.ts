@@ -5,7 +5,18 @@ import {
   loadSettings,
   persistSettings,
   type Settings,
+  type Theme,
 } from "../lib/settings.js";
+
+/**
+ * Le thème se joue sur un attribut de <html>, pas sur une classe de composant :
+ * les deux palettes sont des variables CSS (voir src/style.css), donc tout
+ * l'écran bascule d'un coup, y compris ce qui est rendu hors de l'application
+ * Vue (fond de page pendant le chargement).
+ */
+function applyTheme(theme: Theme): void {
+  document.documentElement.dataset.theme = theme;
+}
 
 export const useSettingsStore = defineStore("settings", {
   state: (): Settings => loadSettings(),
@@ -37,6 +48,18 @@ export const useSettingsStore = defineStore("settings", {
     setColorblindMode(value: boolean) {
       this.colorblindMode = value;
       this.persist();
+    },
+    setTheme(value: Theme) {
+      this.theme = value;
+      applyTheme(value);
+      this.persist();
+    },
+    /**
+     * À appeler une fois au démarrage : les réglages sont lus depuis le
+     * stockage local, mais rien ne les a encore transmis au document.
+     */
+    applyStoredTheme() {
+      applyTheme(this.theme);
     },
     persist() {
       persistSettings(this.$state);
