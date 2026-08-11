@@ -87,12 +87,20 @@ function acquire(): Renderer | undefined {
     renderer.shadowMap.enabled = true;
 
     const scene = new Scene();
-    // Mêmes lumières que BoardPreview : une ambiante faible et une
-    // directionnelle marquée, sans quoi toutes les faces reçoivent autant de
-    // lumière et le relief disparaît.
+    // Mêmes lumières que BoardPreview, aux mêmes valeurs : une ambiante faible
+    // et une directionnelle marquée, sans quoi toutes les faces reçoivent
+    // autant de lumière et le relief disparaît.
     scene.add(new AmbientLight(0xffffff, 0.35));
     const sun = new DirectionalLight(0xffffff, 1.3);
     sun.position.set(10, 20, 10);
+    // L'ombre portée fait la moitié du volume. L'oublier ici donnait une
+    // vignette plus plate que le plateau qu'elle est censée annoncer — et
+    // c'est précisément ce qu'on cherche à éviter en partageant board.ts.
+    //
+    // Le tronc d'ombre reste celui par défaut, comme dans BoardPreview : les
+    // deux rendus se ressemblent, y compris dans leurs limites. S'il faut un
+    // jour cadrer cette ombre sur le plateau, c'est aux DEUX endroits.
+    sun.castShadow = true;
     scene.add(sun);
 
     shared = {
