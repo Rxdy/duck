@@ -6,7 +6,24 @@ import { grantStarterSkins } from "./skins.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_PATTERN = /^[a-zA-Z0-9_-]{3,20}$/;
-const MIN_PASSWORD_LENGTH = 8;
+/**
+ * Socle du mot de passe. Volontairement REDONDANT avec la jauge de
+ * l'inscription (front/src/lib/passwordStrength.ts) : la jauge guide, elle ne
+ * protège pas — n'importe qui peut poster directement sur /register sans
+ * passer par le formulaire.
+ *
+ * La note d'entropie, elle, reste côté client : c'est une aide au choix, pas
+ * une frontière de sécurité, et la dupliquer ici imposerait de maintenir deux
+ * copies du même calcul (front/ et back/ ne partagent pas de code, voir
+ * docs/06-architecture-technique.md).
+ */
+const MIN_PASSWORD_LENGTH = 10;
+const PASSWORD_CLASSES = [
+  { pattern: /[a-z]/, label: "une minuscule" },
+  { pattern: /[A-Z]/, label: "une majuscule" },
+  { pattern: /[0-9]/, label: "un chiffre" },
+  { pattern: /[^a-zA-Z0-9]/, label: "un caractère spécial" },
+];
 const SCRYPT_KEY_LENGTH = 64;
 
 /**
@@ -43,10 +60,50 @@ export function validateCredentials(
   if (password.length < MIN_PASSWORD_LENGTH) {
     return `Le mot de passe doit faire au moins ${MIN_PASSWORD_LENGTH} caractères.`;
   }
+  // Tout ce qui manque, d'un coup : renvoyer la première erreur venue ferait
+  // recommencer le joueur autant de fois qu'il lui manque de familles.
+  const missing = PASSWORD_CLASSES.filter((c) => !c.pattern.test(password)).map((c) => c.label);
+  if (missing.length > 0) {
+    return `Le mot de passe doit contenir au moins ${missing.join(", ")}.`;
+  }
   return undefined;
 }
 
 export class UsernameOrEmailAlreadyUsedError extends Error {}
+
+/**
+ * Code SQLSTATE d'une violation de contrainte d'unicité sous PostgreSQL.
+ *
+ * C'est la base qui arbitre les doublons, pas un `select` préalable : entre le
+ * `select` et le `insert` il existe une fenêtre où deux inscriptions
+ * simultanées du même pseudo passent toutes les deux la vérification. La
+ * seconde remontait alors l'erreur brute du driver — donc un 500 au client
+ * là où un 400 s'imposait.
+ */
+const UNIQUE_VIOLATION = "23505";
+
+/**
+ * La chaîne des `cause` est parcourue, pas seulement l'erreur du dessus :
+ * Drizzle enveloppe l'erreur du driver dans un `DrizzleQueryError` qui ne
+ * porte pas le code SQLSTATE, celui-ci reste sur le `DatabaseError` de `pg`
+ * en dessous. Remonter la chaîne évite d'avoir à connaître le nombre exact
+ * d'emballages, qui est un détail de version.
+ */
+function violatedConstraint(error: unknown): string | undefined {
+  for (let current = error; current instanceof Error; current = current.cause) {
+    const candidate = current as { code?: unknown; constraint?: unknown };
+    if (candidate.code === UNIQUE_VIOLATION && typeof candidate.constraint === "string") {
+      return candidate.constraint;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Nom de l'index qui garantit qu'un `anon_id` n'appartient qu'à un compte
+ * (voir db/init/10-anon-id-unique.sql).
+ */
+const ANON_ID_CONSTRAINT = "accounts_anon_id_key";
 
 export interface AuthResult {
   token: string;
@@ -67,16 +124,37 @@ export async function registerAccount(
   password: string,
   anonId?: string,
 ): Promise<AuthResult> {
-  const existing = await db
-    .select()
-    .from(accounts)
-    .where(or(eq(accounts.username, username), eq(accounts.email, email)));
-  if (existing.length > 0) throw new UsernameOrEmailAlreadyUsedError();
+  // Pas de `select` de vérification avant l'insertion : seule la contrainte
+  // d'unicité de la base tranche sans fenêtre de course (voir
+  // UNIQUE_VIOLATION). C'est aussi un aller-retour de moins.
+  const values = {
+    username,
+    email,
+    passwordHash: hashPassword(password),
+    anonId: anonId ?? null,
+  };
 
-  const [account] = await db
-    .insert(accounts)
-    .values({ username, email, passwordHash: hashPassword(password), anonId: anonId ?? null })
-    .returning();
+  let account;
+  try {
+    [account] = await db.insert(accounts).values(values).returning();
+  } catch (error) {
+    const constraint = violatedConstraint(error);
+    if (constraint === undefined) throw error;
+
+    // L'`anon_id` du navigateur appartient déjà à un autre compte : il n'y a
+    // rien d'anormal à créer un second compte depuis le même appareil, alors
+    // on l'inscrit SANS revendiquer cette identité. Il perd le rattachement
+    // des parties d'avant son inscription — elles sont bien celles de
+    // quelqu'un d'autre.
+    if (constraint === ANON_ID_CONSTRAINT) {
+      [account] = await db
+        .insert(accounts)
+        .values({ ...values, anonId: null })
+        .returning();
+    } else {
+      throw new UsernameOrEmailAlreadyUsedError();
+    }
+  }
 
   await grantStarterSkins(account!.id);
 
