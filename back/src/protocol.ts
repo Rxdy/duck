@@ -1,4 +1,5 @@
-import type { GameId, PlayerId } from "./shared.js";
+import type { BotLevel } from "./bots.js";
+import type { GameId, GameMode, PlayerId } from "./shared.js";
 
 export type Direction = "UP" | "DOWN" | "LEFT" | "RIGHT";
 
@@ -18,6 +19,11 @@ export interface PlayerState {
   spawnX: number;
   spawnY: number;
   score: number;
+  // Millisecondes d'intouchabilité restantes au moment de l'envoi (0 = aucune),
+  // pour que le client signale l'état (voir front/src/components/organisms/
+  // DuckSprite.vue). Une DURÉE plutôt qu'un instant : l'horloge du navigateur
+  // n'est pas celle du serveur, comparer deux dates donnerait n'importe quoi.
+  immuneForMs: number;
 }
 
 export interface JoinMessage {
@@ -33,6 +39,15 @@ export interface JoinMessage {
   // permet de retrouver le skin équipé du compte (back/src/skins.ts) pour
   // l'afficher sur le canard en partie. Absent si non connecté.
   token?: string;
+  // Mode choisi (voir shared.ts#GAME_MODES) : décide du nombre de joueurs, et
+  // donc de la carte et du nombre de bots. Absent -> duel, pour qu'un client
+  // plus ancien continue de fonctionner.
+  mode?: GameMode;
+  // Niveau imposé aux bots de la partie (voir bots.ts#BOT_LEVELS). Sert à
+  // essayer et régler la difficulté ; le jour où le classement existera,
+  // c'est le serveur qui le choisira d'après l'Elo du joueur, et ce champ
+  // n'aura plus à être écouté.
+  botLevel?: BotLevel;
 }
 
 export interface MoveMessage {
@@ -77,9 +92,11 @@ export interface PingMessage {
  * Lance une partie d'entraînement solo sur une carte custom (éditeur), au
  * lieu de rejoindre une carte générée procéduralement. `tiles` contient les
  * valeurs de l'enum Tile (voir game-engine/tile.ts) sous forme de chaînes.
- * `spawns` liste la position de chaque spawn dans l'ordre des couleurs de
- * l'éditeur (voir front/src/lib/mapEditor.ts#toWireSpawns), pour que chaque
- * joueur apparaisse avec la couleur du spawn sur lequel il est posé.
+ * `spawns` liste la position de chaque spawn et l'indice de sa couleur dans
+ * PLAYER_COLORS (voir front/src/lib/mapEditor.ts#toWireSpawns), pour que
+ * chaque joueur apparaisse avec la couleur du spawn sur lequel il est posé —
+ * l'indice est nécessaire, une carte peut n'utiliser qu'une partie des
+ * couleurs et la position dans la liste ne dit alors rien de la couleur.
  */
 export interface JoinTestMessage {
   type: "JOIN_TEST";
@@ -87,9 +104,27 @@ export interface JoinTestMessage {
     width: number;
     height: number;
     tiles: string[][];
-    spawns: { x: number; y: number }[];
+    spawns: WireSpawn[];
   };
 }
 
+/** Spawn tel qu'il circule sur le fil : position + indice de couleur. */
+export interface WireSpawn {
+  x: number;
+  y: number;
+  color: number;
+}
+
+/**
+ * Le serveur ne peut pas honorer la demande (aucune carte pour le mode
+ * choisi, par exemple). Distinct de END : la partie n'a jamais commencé, et
+ * le client doit le DIRE plutôt que d'afficher un plateau vide et laisser le
+ * joueur attendre un adversaire qui n'arrivera pas.
+ */
+export interface ErrorMessage {
+  type: "ERROR";
+  message: string;
+}
+
 export type ClientMessage = JoinMessage | MoveMessage | PingMessage | JoinTestMessage;
-export type ServerMessage = StateMessage | ScoreMessage | EndMessage | MapMessage;
+export type ServerMessage = StateMessage | ScoreMessage | EndMessage | MapMessage | ErrorMessage;

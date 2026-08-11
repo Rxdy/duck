@@ -14,7 +14,26 @@ export interface PlayerState {
   spawnX: number;
   spawnY: number;
   score: number;
+  // Millisecondes d'intouchabilité restantes à la réception du message (voir
+  // back/src/protocol.ts) : une durée, pas un instant, parce que l'horloge du
+  // navigateur n'est pas celle du serveur.
+  immuneForMs: number;
 }
+
+/**
+ * Les trois modes de la V1 (voir docs/02-gameplay.md#modes-de-jeu) : mêmes
+ * règles, seul le nombre de joueurs change. Doit rester synchronisé à la main
+ * avec GAME_MODES dans back/src/shared.ts — front/ ne partage pas de code
+ * avec back/ (voir docs/06-architecture-technique.md).
+ */
+export type GameMode = "duel" | "ffa3" | "ffa4";
+
+/**
+ * Niveaux de bots (voir back/src/bots.ts) : la cadence et la qualité de
+ * décision montent ensemble. Réglable depuis l'URL pour essayer une partie
+ * contre chacun (voir pages/Game.vue).
+ */
+export type BotLevel = "debutant" | "intermediaire" | "confirme" | "expert" | "impossible";
 
 export interface JoinMessage {
   type: "JOIN";
@@ -27,6 +46,11 @@ export interface JoinMessage {
   // Token de session (voir store/authStore.ts), si connecté : permet au
   // serveur de retrouver le skin équipé du compte pour l'afficher en partie.
   token?: string;
+  // Mode choisi (voir pages/Play.vue) : décide du nombre de joueurs, donc de
+  // la carte et du nombre de bots côté serveur.
+  mode?: GameMode;
+  // Niveau imposé aux bots, pour essayer la difficulté (voir pages/Game.vue).
+  botLevel?: BotLevel;
 }
 
 export interface MoveMessage {
@@ -74,12 +98,23 @@ export interface JoinTestMessage {
     width: number;
     height: number;
     tiles: string[][];
-    // Position de chaque spawn, dans l'ordre des couleurs (voir
-    // lib/mapEditor.ts#toWireSpawns) : permet au serveur d'assigner à chaque
-    // joueur la couleur du spawn sur lequel il apparaît.
-    spawns: { x: number; y: number }[];
+    // Position de chaque spawn ET indice de sa couleur dans PLAYER_COLORS
+    // (voir lib/mapEditor.ts#toWireSpawns) : permet au serveur d'assigner à
+    // chaque joueur la couleur du spawn sur lequel il apparaît, même quand
+    // toutes les couleurs ne sont pas posées.
+    spawns: { x: number; y: number; color: number }[];
   };
 }
 
+/**
+ * Le serveur ne peut pas honorer la demande (aucune carte pour le mode
+ * choisi...). Distinct de END : la partie n'a jamais commencé, il faut le
+ * dire au joueur plutôt que de le laisser devant un plateau vide.
+ */
+export interface ErrorMessage {
+  type: "ERROR";
+  message: string;
+}
+
 export type ClientMessage = JoinMessage | MoveMessage | JoinTestMessage;
-export type ServerMessage = StateMessage | ScoreMessage | EndMessage | MapMessage;
+export type ServerMessage = StateMessage | ScoreMessage | EndMessage | MapMessage | ErrorMessage;
