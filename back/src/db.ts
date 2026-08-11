@@ -1,7 +1,8 @@
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { sql } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import { matches } from "./schema.js";
+import type { GameMode } from "./shared.js";
 
 export interface MatchResultPlayer {
   // null si le joueur n'a pas transmis d'id anonyme (ex. le bot). Voir
@@ -16,6 +17,10 @@ export interface MatchResultPlayer {
 export interface MatchResult {
   mapName: string;
   players: MatchResultPlayer[];
+  /** Voir shared.ts#GAME_MODES. Absent pour une partie d'entraînement. */
+  mode?: GameMode;
+  /** Durée réelle de la manche, du premier joueur entré au point gagnant. */
+  durationMs?: number;
 }
 
 // Même valeur par défaut que back/.env.example (cohérent avec PORT plus haut
@@ -41,6 +46,8 @@ export async function recordMatch(result: MatchResult): Promise<void> {
     mapName: result.mapName,
     players: result.players,
     winnerAnonId: result.players.find((p) => p.isWinner)?.anonId ?? null,
+    mode: result.mode ?? null,
+    durationMs: result.durationMs ?? null,
   });
 }
 
@@ -69,4 +76,70 @@ export async function getMatchStats(anonId: string): Promise<MatchStats> {
   `);
   const row = result.rows[0];
   return { played: row?.played ?? 0, won: row?.won ?? 0 };
+}
+
+export interface MatchRecapPlayer {
+  name: string;
+  color: string;
+  score: number;
+  isWinner: boolean;
+  /** Le joueur qui consulte, pour le distinguer de ses adversaires. */
+  isMe: boolean;
+}
+
+export interface MatchRecap {
+  id: string;
+  mapName: string;
+  /** null pour les parties d'avant db/init/09-match-recap.sql. */
+  mode: string | null;
+  durationMs: number | null;
+  playedAt: string;
+  players: MatchRecapPlayer[];
+}
+
+/**
+ * Parties d'un joueur, de la plus récente à la plus ancienne, pour le
+ * récapitulatif de la page Compte.
+ *
+ * Les identifiants anonymes des AUTRES joueurs ne sortent pas d'ici : ils ne
+ * servent qu'à reconnaître le consultant (`isMe`), et diffuser l'identifiant
+ * d'un adversaire permettrait de le pister d'une partie à l'autre.
+ *
+ * `limit` borne la requête plutôt que le rendu : un compte à mille parties ne
+ * doit pas en télécharger mille pour n'en afficher que trois.
+ */
+export async function listMatchesFor(anonId: string, limit = 50): Promise<MatchRecap[]> {
+  const rows = await db
+    .select()
+    .from(matches)
+    .where(
+      sql`exists (
+        select 1 from jsonb_array_elements(${matches.players}) player
+        where player->>'anonId' = ${anonId}
+      )`,
+    )
+    .orderBy(desc(matches.playedAt))
+    .limit(limit);
+
+  return rows.map((row) => {
+    const players = row.players as MatchResultPlayer[];
+    return {
+      id: row.id,
+      mapName: row.mapName,
+      mode: row.mode,
+      durationMs: row.durationMs,
+      playedAt: row.playedAt.toISOString(),
+      // Trié par score décroissant : un récapitulatif se lit du vainqueur au
+      // dernier, pas dans l'ordre où les joueurs se sont connectés.
+      players: [...players]
+        .sort((a, b) => b.score - a.score)
+        .map((player) => ({
+          name: player.name,
+          color: player.color,
+          score: player.score,
+          isWinner: player.isWinner,
+          isMe: player.anonId === anonId,
+        })),
+    };
+  });
 }
