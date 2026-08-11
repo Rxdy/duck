@@ -20,3 +20,24 @@ export function getOrCreateAnonId(): string {
     return crypto.randomUUID(); // stockage indisponible : un id éphémère plutôt que planter
   }
 }
+
+/**
+ * Renouvelle l'identifiant après qu'un compte l'a revendiqué à l'inscription.
+ *
+ * Sans ça, le navigateur continuait de proposer le MÊME id au compte suivant
+ * créé depuis cet appareil : deux comptes distincts se retrouvaient avec la
+ * même identité anonyme, et voyaient donc tous les deux le même historique de
+ * parties. Le serveur refuse désormais la seconde revendication
+ * (db/init/10-anon-id-unique.sql) ; renouveler ici évite en plus que le
+ * second compte parte avec un id déjà pris, et donc sans identité anonyme du
+ * tout.
+ *
+ * Frontière d'E/S (localStorage) — volontairement non testée unitairement.
+ */
+export function renewAnonId(): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, crypto.randomUUID());
+  } catch {
+    // Stockage indisponible : l'id était déjà éphémère, rien à renouveler.
+  }
+}
