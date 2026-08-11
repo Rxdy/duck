@@ -1,11 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { mount } from "@vue/test-utils";
 import SavedMapsList from "./SavedMapsList.vue";
-import type { SavedMap } from "../../lib/savedMaps.js";
+import type { SavedMap } from "../../lib/mapsApi.js";
 
 const maps: SavedMap[] = [
-  { id: "a", name: "Carte A", width: 15, height: 9, tiles: [], updatedAt: "2026-01-01" },
-  { id: "b", name: "Carte B", width: 20, height: 20, tiles: [], updatedAt: "2026-01-02" },
+  {
+    id: "a",
+    name: "Carte A",
+    width: 15,
+    height: 9,
+    tiles: [],
+    spawnCount: 2,
+    updatedAt: "2026-01-01",
+  },
+  {
+    id: "b",
+    name: "Carte B",
+    width: 20,
+    height: 20,
+    tiles: [],
+    spawnCount: 2,
+    updatedAt: "2026-01-02",
+  },
 ];
 
 describe("SavedMapsList", () => {

@@ -1,5 +1,5 @@
 import { isSpawnKind, type TileKind } from "./mapEditor.js";
-import type { SavedMap } from "./savedMaps.js";
+import type { SavedMap } from "./mapsApi.js";
 
 function sanitizeTileKind(value: unknown): TileKind {
   if (value === "empty" || value === "wall") return value;
@@ -9,14 +9,20 @@ function sanitizeTileKind(value: unknown): TileKind {
 
 /**
  * Valide un JSON importé (fichier partagé par un autre joueur, voir
- * exportMapAsFile) et le transforme en SavedMap prêt à rejoindre sa propre
- * liste. Un id/updatedAt frais est toujours généré : on ne reprend jamais
- * l'identité de la carte d'origine, pour ne jamais entrer en collision avec
- * une carte déjà présente localement — y compris en réimportant deux fois le
- * même fichier. `undefined` si la structure de base (nom, dimensions, cases)
- * n'est pas exploitable.
+ * exportMapAsFile). L'identité de la carte d'origine n'est JAMAIS reprise :
+ * l'importer crée une nouvelle carte sur le compte (le serveur lui donne son
+ * id, voir lib/mapsApi.ts), donc réimporter deux fois le même fichier ne peut
+ * pas écraser quoi que ce soit. `undefined` si la structure de base (nom,
+ * dimensions, cases) n'est pas exploitable.
  */
-export function parseImportedMap(raw: unknown): SavedMap | undefined {
+export interface ImportedMap {
+  name: string;
+  width: number;
+  height: number;
+  tiles: TileKind[][];
+}
+
+export function parseImportedMap(raw: unknown): ImportedMap | undefined {
   if (typeof raw !== "object" || raw === null) return undefined;
   const r = raw as Record<string, unknown>;
 
@@ -29,12 +35,10 @@ export function parseImportedMap(raw: unknown): SavedMap | undefined {
   );
 
   return {
-    id: crypto.randomUUID(),
     name: r.name.trim() || "Carte importée",
     width: r.width,
     height: r.height,
     tiles,
-    updatedAt: new Date().toISOString(),
   };
 }
 
