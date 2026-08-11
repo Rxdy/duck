@@ -1,35 +1,26 @@
-import {
-  applyMove,
-  DIRECTION_DELTA,
-  isWalkable,
-  Tile,
-  type GameMap,
-  type GameState,
-  type Player,
-} from "./game-engine/index.js";
+import { applyMove, Tile, type GameMap, type GameState } from "./game-engine/index.js";
+import { BOT_LEVELS, chooseBotDirection, DEFAULT_BOT_LEVEL, type BotLevel } from "./bots.js";
 import type {
   ClientMessage,
-  Direction,
   MapMessage,
   PlayerState,
   ServerMessage,
+  WireSpawn,
 } from "./protocol.js";
 import { PLAYER_COLORS } from "./shared.js";
+import type { GameMode } from "./shared.js";
 import type { MatchResult } from "./db.js";
 import type { WebSocket } from "ws";
 
-const BOT_DIRECTIONS: Direction[] = ["UP", "DOWN", "LEFT", "RIGHT"];
-const BOT_MOVE_INTERVAL_MS = 700;
-// Un keydown répété (touche maintenue/auto-repeat du navigateur, ou spam
-// clavier) peut envoyer bien plus de MOVE par seconde qu'un joueur qui tape
-// case par case : sans limite ici, le déplacement n'est cadencé par rien
-// côté serveur (seule autorité, voir docs/02-gameplay.md#principe) et le
-// canard peut aller beaucoup plus vite que prévu.
-const MOVE_COOLDOWN_MS = 120;
-// Une bonne partie du temps le bot fonce vers la base ennemie la plus proche,
-// le reste du temps il bouge au hasard (parmi les directions non bloquées) :
-// juste assez pour scorer occasionnellement sans devenir un adversaire parfait.
-const BOT_CHASE_CHANCE = 0.7;
+// Plancher anti-triche, PAS une vitesse de jeu : marteler la touche est un
+// skill assumé (connaître la carte et enchaîner vite doit payer, voir
+// docs/02-gameplay.md#rythme-de-déplacement), donc on ne plafonne pas le
+// joueur. Un humain culmine autour de 10-14 actions/s ; à 50 ms (20/s) on
+// laisse la marge à tout le monde tout en écartant un client scripté qui
+// enverrait des centaines de MOVE par seconde. Les vrais ralentissements
+// viendront des cases à effet (sable...), en relevant cet intervalle
+// localement pour le joueur concerné.
+const MOVE_FLOOR_MS = 50;
 
 /**
  * Fourni pour une salle de Duel (voir back/src/index.ts) : permet
@@ -38,18 +29,23 @@ const BOT_CHASE_CHANCE = 0.7;
  */
 export interface MatchContext {
   mapName: string;
+  mode: GameMode;
   onEnd: (result: MatchResult) => void;
 }
 
 export class GameRoom {
   private state: GameState;
   private sockets = new Map<string, WebSocket>();
-  private botTimer: ReturnType<typeof setInterval> | null = null;
-  private spawnOrder: { x: number; y: number }[];
+  private botTimers: ReturnType<typeof setInterval>[] = [];
+  private spawnOrder: WireSpawn[];
   private lastMoveAt = new Map<string, number>();
   private winScore?: number;
   private matchContext?: MatchContext;
   private ended = false;
+  // Instant d'entrée du PREMIER joueur, pas de création de la salle : c'est de
+  // là que la partie est réellement jouée. Une salle créée puis rejointe une
+  // seconde plus tard ne doit pas facturer cette seconde au joueur.
+  private startedAt?: number;
   // Identifiant anonyme par joueur (voir front/src/lib/anonId.ts), séparé du
   // Player du moteur de jeu : il ne doit jamais être diffusé aux autres
   // joueurs via broadcastState, seulement utilisé pour enregistrer la partie.
@@ -72,7 +68,7 @@ export class GameRoom {
   constructor(
     id: string,
     map: GameMap,
-    spawnOrder: { x: number; y: number }[] = [],
+    spawnOrder: WireSpawn[] = [],
     winScore?: number,
     matchContext?: MatchContext,
   ) {
@@ -89,6 +85,7 @@ export class GameRoom {
     anonId?: string,
     accessory?: string,
   ): void {
+    this.startedAt ??= Date.now();
     this.sockets.set(playerId, socket);
     this.addPlayer(playerId, name, accessory);
     if (anonId) this.anonIds.set(playerId, anonId);
@@ -96,21 +93,34 @@ export class GameRoom {
   }
 
   /**
-   * Ajoute un adversaire artificiel qui se déplace tout seul (mode
-   * entraînement, pour tester une carte custom sans second humain). La
-   * plupart du temps il fonce vers la base ennemie la plus proche (voir
-   * chooseBotDirection), le reste du temps il bouge au hasard : pas de vraie
-   * recherche de chemin (s'il y a un mur entre lui et la base, il peut
-   * tourner en rond un moment), volontairement pour rester simple à battre.
+   * Ajoute un adversaire artificiel du niveau demandé (voir bots.ts). Sa
+   * cadence VIENT du niveau : c'est le premier des deux leviers de
+   * difficulté, avec la qualité de ses décisions.
    */
-  addBot(playerId: string, name: string): void {
+  addBot(
+    playerId: string,
+    name: string,
+    level: BotLevel = DEFAULT_BOT_LEVEL,
+    anonId?: string,
+  ): void {
     this.addPlayer(playerId, name);
+    // Un bot a un compte (voir botAccounts.ts) : son identifiant anonyme relie
+    // la partie à ce compte, donc ses statistiques et son classement vivent
+    // exactement comme ceux d'un joueur.
+    if (anonId) this.anonIds.set(playerId, anonId);
     this.broadcastState();
 
-    this.botTimer = setInterval(() => {
-      const direction = this.chooseBotDirection(playerId);
-      this.handle(playerId, { type: "MOVE", direction });
-    }, BOT_MOVE_INTERVAL_MS);
+    // Un minuteur PAR bot : en FFA il y en a deux ou trois dans la salle
+    // (voir shared.ts#GAME_MODES), et n'en garder qu'un seul laissait les
+    // précédents tourner indéfiniment après la fin de la partie — des bots
+    // fantômes qui continuent de bouger dans une salle que plus personne ne
+    // regarde.
+    this.botTimers.push(
+      setInterval(() => {
+        const direction = chooseBotDirection(this.state, playerId, level, Date.now());
+        this.handle(playerId, { type: "MOVE", direction });
+      }, BOT_LEVELS[level].intervalMs),
+    );
   }
 
   leave(playerId: string): void {
@@ -118,9 +128,9 @@ export class GameRoom {
     this.state.players = this.state.players.filter((p) => p.id !== playerId);
     this.lastMoveAt.delete(playerId);
     this.anonIds.delete(playerId);
-    // Plus aucun humain dans la salle : on arrête le bot pour ne pas laisser
-    // un intervalle tourner indéfiniment en arrière-plan sur le serveur.
-    if (this.sockets.size === 0) this.stopBot();
+    // Plus aucun humain dans la salle : on arrête les bots pour ne pas
+    // laisser des intervalles tourner indéfiniment en arrière-plan.
+    if (this.sockets.size === 0) this.stopBots();
     this.broadcastState();
   }
 
@@ -145,10 +155,10 @@ export class GameRoom {
     if (message.type === "MOVE") {
       const now = Date.now();
       const last = this.lastMoveAt.get(playerId) ?? 0;
-      if (now - last < MOVE_COOLDOWN_MS) return; // trop tôt : on ignore silencieusement
+      if (now - last < MOVE_FLOOR_MS) return; // plus vite qu'humainement possible : ignoré
       this.lastMoveAt.set(playerId, now);
 
-      this.state = applyMove(this.state, playerId, message.direction);
+      this.state = applyMove(this.state, playerId, message.direction, now);
       this.broadcastState();
       this.checkForWinner();
     }
@@ -167,11 +177,13 @@ export class GameRoom {
     if (!winner) return;
 
     this.ended = true;
-    this.stopBot();
+    this.stopBots();
 
     if (this.matchContext) {
       this.matchContext.onEnd({
         mapName: this.matchContext.mapName,
+        mode: this.matchContext.mode,
+        durationMs: this.startedAt === undefined ? undefined : Date.now() - this.startedAt,
         players: this.state.players.map((p) => ({
           anonId: this.anonIds.get(p.id) ?? null,
           name: p.name,
@@ -191,86 +203,31 @@ export class GameRoom {
 
   private addPlayer(playerId: string, name: string, accessory?: string): void {
     const spawn = this.findSpawn();
+    // La couleur vient du SPAWN, pas du rang d'arrivée : une carte qui
+    // n'utilise pas toutes les couleurs (spawn-0/2/3, par exemple) ferait
+    // sinon apparaître un canard cyan sur une case ambre — la case, le canard
+    // et son halo de territoire ne s'accorderaient plus (voir
+    // front/src/lib/mapEditor.ts#toWireSpawns). Sans indice de couleur (carte
+    // procédurale, dont les Spawn sont anonymes), le rang reste le seul
+    // repère disponible.
+    const colorIndex = spawn.color ?? this.state.players.length;
     this.state.players.push({
       id: playerId,
       name,
-      color: PLAYER_COLORS[this.state.players.length % PLAYER_COLORS.length]!,
+      color: PLAYER_COLORS[colorIndex % PLAYER_COLORS.length]!,
       accessory: accessory ?? "none",
       x: spawn.x,
       y: spawn.y,
       spawnX: spawn.x,
       spawnY: spawn.y,
       score: 0,
+      immuneUntil: 0,
     });
   }
 
-  private stopBot(): void {
-    if (this.botTimer) {
-      clearInterval(this.botTimer);
-      this.botTimer = null;
-    }
-  }
-
-  /**
-   * BOT_CHASE_CHANCE du temps : essaie de se rapprocher de la base ennemie la
-   * plus proche (axe le plus déséquilibré en premier). Sinon, ou si les deux
-   * directions vers la cible sont bloquées : une direction au hasard parmi
-   * celles qui sont réellement jouables (jamais un mur ou un joueur).
-   */
-  private chooseBotDirection(botId: string): Direction {
-    const bot = this.state.players.find((p) => p.id === botId);
-    if (!bot) return BOT_DIRECTIONS[0]!;
-
-    if (Math.random() < BOT_CHASE_CHANCE) {
-      const target = this.nearestEnemyBase(bot);
-      if (target) {
-        const chase = this.directionsTowards(bot, target).find((d) => this.isValidBotMove(bot, d));
-        if (chase) return chase;
-      }
-    }
-
-    const valid = BOT_DIRECTIONS.filter((d) => this.isValidBotMove(bot, d));
-    if (valid.length > 0) return valid[Math.floor(Math.random() * valid.length)]!;
-    // Complètement bloqué (rare) : autant tenter quelque chose, applyMove no-op de toute façon.
-    return BOT_DIRECTIONS[Math.floor(Math.random() * BOT_DIRECTIONS.length)]!;
-  }
-
-  private nearestEnemyBase(bot: Player): { x: number; y: number } | undefined {
-    let nearest: Player | undefined;
-    let nearestDistance = Infinity;
-    for (const p of this.state.players) {
-      if (p.id === bot.id) continue;
-      const distance = Math.abs(p.spawnX - bot.x) + Math.abs(p.spawnY - bot.y);
-      if (distance < nearestDistance) {
-        nearest = p;
-        nearestDistance = distance;
-      }
-    }
-    return nearest ? { x: nearest.spawnX, y: nearest.spawnY } : undefined;
-  }
-
-  // Ordonne UP/DOWN/LEFT/RIGHT par efficacité pour rejoindre `target` : l'axe
-  // le plus éloigné d'abord (pas de vraie recherche de chemin, juste une
-  // heuristique gloutonne — un mur sur cet axe et le bot tentera l'autre).
-  private directionsTowards(
-    from: { x: number; y: number },
-    target: { x: number; y: number },
-  ): Direction[] {
-    const dx = target.x - from.x;
-    const dy = target.y - from.y;
-    const horizontal: Direction | undefined = dx > 0 ? "RIGHT" : dx < 0 ? "LEFT" : undefined;
-    const vertical: Direction | undefined = dy > 0 ? "DOWN" : dy < 0 ? "UP" : undefined;
-    const primary = Math.abs(dx) >= Math.abs(dy) ? horizontal : vertical;
-    const secondary = primary === horizontal ? vertical : horizontal;
-    return [primary, secondary].filter((d): d is Direction => d !== undefined);
-  }
-
-  private isValidBotMove(bot: Player, direction: Direction): boolean {
-    const { dx, dy } = DIRECTION_DELTA[direction];
-    const targetX = bot.x + dx;
-    const targetY = bot.y + dy;
-    if (!isWalkable(this.state.map, targetX, targetY)) return false;
-    return !this.state.players.some((p) => p.id !== bot.id && p.x === targetX && p.y === targetY);
+  private stopBots(): void {
+    for (const timer of this.botTimers) clearInterval(timer);
+    this.botTimers = [];
   }
 
   // Attribue à chaque joueur qui rejoint un Spawn tile distinct, plutôt que
@@ -278,7 +235,7 @@ export class GameRoom {
   // démarreraient superposés sur la même case. Utilise l'ordre de couleurs
   // fourni par le client s'il existe (carte custom), sinon retombe sur un
   // simple scan ligne par ligne (carte générée procéduralement).
-  private findSpawn(): { x: number; y: number } {
+  private findSpawn(): { x: number; y: number; color?: number } {
     const spawns = this.spawnOrder.length > 0 ? this.spawnOrder : this.scanSpawns();
     if (spawns.length === 0) return { x: 1, y: 1 };
     return spawns[this.state.players.length % spawns.length]!;
@@ -295,7 +252,11 @@ export class GameRoom {
   }
 
   private broadcastState(): void {
-    const players: PlayerState[] = this.state.players;
+    const now = Date.now();
+    const players: PlayerState[] = this.state.players.map((p) => ({
+      ...p,
+      immuneForMs: Math.max(0, p.immuneUntil - now),
+    }));
     const message: ServerMessage = { type: "STATE", players };
     const payload = JSON.stringify(message);
     for (const socket of this.sockets.values()) {

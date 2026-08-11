@@ -3,6 +3,8 @@ import type { WebSocket } from "ws";
 import { Tile, type GameMap } from "./game-engine/index.js";
 import { generateMap } from "./map-generator/index.js";
 import { GameRoom } from "./room.js";
+import { PLAYER_COLORS } from "./shared.js";
+import { POINTS_PER_BASE } from "./game-engine/index.js";
 
 function fakeSocket() {
   return { send: vi.fn() } as unknown as WebSocket;
@@ -73,7 +75,7 @@ describe("GameRoom", () => {
     expect(lastMessage.players[0].x).toBeGreaterThanOrEqual(0);
   });
 
-  it("ignores a MOVE sent before the per-player cooldown elapses (keyboard auto-repeat / spam)", () => {
+  it("ignores a MOVE sent faster than any human could type (client scripté)", () => {
     const openMap: GameMap = {
       width: 5,
       height: 1,
@@ -87,14 +89,16 @@ describe("GameRoom", () => {
       room.join("p1", "Alice", socket);
 
       room.handle("p1", { type: "MOVE", direction: "RIGHT" });
-      room.handle("p1", { type: "MOVE", direction: "RIGHT" }); // trop tôt, ignoré
+      room.handle("p1", { type: "MOVE", direction: "RIGHT" }); // même milliseconde, ignoré
 
       let calls = (socket.send as ReturnType<typeof vi.fn>).mock.calls;
       let lastMessage = JSON.parse(calls[calls.length - 1]![0] as string);
       expect(lastMessage.players[0]).toMatchObject({ x: 1 });
 
-      vi.advanceTimersByTime(120);
-      room.handle("p1", { type: "MOVE", direction: "RIGHT" }); // cooldown écoulé, accepté
+      // 50 ms = 20 actions/s : au-delà de ce qu'un joueur atteint au clavier,
+      // donc jamais atteint en jouant normalement.
+      vi.advanceTimersByTime(50);
+      room.handle("p1", { type: "MOVE", direction: "RIGHT" }); // plancher écoulé, accepté
 
       calls = (socket.send as ReturnType<typeof vi.fn>).mock.calls;
       lastMessage = JSON.parse(calls[calls.length - 1]![0] as string);
@@ -155,8 +159,8 @@ describe("GameRoom", () => {
     // vérifier qu'il prend bien le dessus — c'est ce qui garantit que le
     // joueur apparaît avec la couleur du spawn sur lequel il est posé.
     const room = new GameRoom("test-room", twoSpawnMap(), [
-      { x: 2, y: 1 },
-      { x: 1, y: 1 },
+      { x: 2, y: 1, color: 0 },
+      { x: 1, y: 1, color: 1 },
     ]);
     const socket = fakeSocket();
 
@@ -165,6 +169,47 @@ describe("GameRoom", () => {
     const [payload] = (socket.send as ReturnType<typeof vi.fn>).mock.calls[0]!;
     const message = JSON.parse(payload as string);
     expect(message.players[0]).toMatchObject({ x: 2, y: 1 });
+  });
+
+  it("colors each player after their own spawn, not their join rank", () => {
+    // Carte qui saute une couleur (spawn-0 puis spawn-2, cas d'une carte à 3
+    // spawns où l'auteur n'a pas pris les couleurs à la suite) : le 2e joueur
+    // doit être ambre comme sa case, pas cyan comme son rang d'arrivée.
+    const room = new GameRoom("test-room", twoSpawnMap(), [
+      { x: 1, y: 1, color: 0 },
+      { x: 2, y: 1, color: 2 },
+    ]);
+    const socket = fakeSocket();
+
+    room.join("p1", "Alice", socket);
+    room.join("p2", "Bob", fakeSocket());
+
+    const calls = (socket.send as ReturnType<typeof vi.fn>).mock.calls;
+    const lastMessage = JSON.parse(calls[calls.length - 1]![0] as string);
+    expect(lastMessage.players[0]).toMatchObject({ x: 1, y: 1, color: PLAYER_COLORS[0] });
+    expect(lastMessage.players[1]).toMatchObject({ x: 2, y: 1, color: PLAYER_COLORS[2] });
+  });
+
+  it("stops EVERY bot when the last human leaves, not just the last one added", () => {
+    // En FFA il y a deux ou trois bots dans la salle : n'en arrêter qu'un
+    // laissait les autres se déplacer indéfiniment côté serveur, dans une
+    // salle que plus personne ne regarde.
+    vi.useFakeTimers();
+    try {
+      const room = new GameRoom("test-room", twoSpawnMap());
+      room.join("p1", "Alice", fakeSocket());
+      room.addBot("bot-1", "Bot 1");
+      room.addBot("bot-2", "Bot 2");
+      room.addBot("bot-3", "Bot 3");
+
+      expect(vi.getTimerCount()).toBe(3);
+
+      room.leave("p1");
+
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("adds a bot player that moves on its own on a timer", () => {
@@ -189,107 +234,6 @@ describe("GameRoom", () => {
       // On vérifie surtout qu'un déplacement a bien été tenté (broadcast supplémentaire).
       expect(calls.length).toBeGreaterThan(1);
       expect(lastMessage.players[1]).toMatchObject(initialBotPosition);
-    } finally {
-      vi.useRealTimers();
-      vi.restoreAllMocks();
-    }
-  });
-
-  function openRoomMap(): GameMap {
-    return {
-      width: 5,
-      height: 5,
-      tiles: [
-        [Tile.Wall, Tile.Wall, Tile.Wall, Tile.Wall, Tile.Wall],
-        [Tile.Wall, Tile.Spawn, Tile.Empty, Tile.Empty, Tile.Wall],
-        [Tile.Wall, Tile.Empty, Tile.Empty, Tile.Empty, Tile.Wall],
-        [Tile.Wall, Tile.Empty, Tile.Empty, Tile.Spawn, Tile.Wall],
-        [Tile.Wall, Tile.Wall, Tile.Wall, Tile.Wall, Tile.Wall],
-      ],
-    };
-  }
-
-  it("chases the nearest enemy base when the dice roll favors it", () => {
-    vi.useFakeTimers();
-    try {
-      const room = new GameRoom("test-room", openRoomMap());
-      const socket = fakeSocket();
-      room.join("p1", "Testeur", socket); // spawn (1,1)
-      room.addBot("bot", "Bot"); // spawn (3,3)
-
-      vi.spyOn(Math, "random").mockReturnValue(0); // < BOT_CHASE_CHANCE -> poursuite
-      vi.advanceTimersByTime(700);
-
-      const calls = (socket.send as ReturnType<typeof vi.fn>).mock.calls;
-      const lastMessage = JSON.parse(calls[calls.length - 1]![0] as string);
-      const bot = lastMessage.players.find((p: { id: string }) => p.id === "bot");
-      // Se rapproche de la base du joueur (1,1) : x diminue, y inchangé.
-      expect(bot).toMatchObject({ x: 2, y: 3 });
-    } finally {
-      vi.useRealTimers();
-      vi.restoreAllMocks();
-    }
-  });
-
-  it("moves randomly among only the currently valid directions when the dice roll skips the chase", () => {
-    vi.useFakeTimers();
-    try {
-      const room = new GameRoom("test-room", openRoomMap());
-      const socket = fakeSocket();
-      room.join("p1", "Testeur", socket);
-      room.addBot("bot", "Bot"); // spawn (3,3)
-
-      // 1er appel (jet de poursuite) >= BOT_CHASE_CHANCE -> pas de poursuite ;
-      // 2e appel (choix parmi les directions valides) -> la première (UP).
-      vi.spyOn(Math, "random").mockReturnValueOnce(0.9).mockReturnValueOnce(0);
-      vi.advanceTimersByTime(700);
-
-      const calls = (socket.send as ReturnType<typeof vi.fn>).mock.calls;
-      const lastMessage = JSON.parse(calls[calls.length - 1]![0] as string);
-      const bot = lastMessage.players.find((p: { id: string }) => p.id === "bot");
-      // DOWN et RIGHT cognent un mur depuis (3,3) : seules UP et LEFT sont
-      // valides, dans cet ordre (voir BOT_DIRECTIONS) -> le 1er choix est UP.
-      expect(bot).toMatchObject({ x: 3, y: 2 });
-    } finally {
-      vi.useRealTimers();
-      vi.restoreAllMocks();
-    }
-  });
-
-  it("never walks onto another player's tile, even when that's the direction it wants to chase", () => {
-    // Couloir à 3 spawns : Testeur (1,1), Blocker (3,1) — la base la plus
-    // proche du bot, mais Blocker est justement dessus — et le bot (4,1).
-    const corridor: GameMap = {
-      width: 6,
-      height: 3,
-      tiles: [
-        [Tile.Wall, Tile.Wall, Tile.Wall, Tile.Wall, Tile.Wall, Tile.Wall],
-        [Tile.Wall, Tile.Spawn, Tile.Empty, Tile.Spawn, Tile.Spawn, Tile.Wall],
-        [Tile.Wall, Tile.Wall, Tile.Wall, Tile.Wall, Tile.Wall, Tile.Wall],
-      ],
-    };
-
-    vi.useFakeTimers();
-    try {
-      const room = new GameRoom("test-room", corridor);
-      const socketA = fakeSocket();
-      const socketB = fakeSocket();
-      room.join("p1", "Testeur", socketA); // (1,1)
-      room.join("p2", "Blocker", socketB); // (3,1) — base la plus proche du bot
-      room.addBot("bot", "Bot"); // (4,1)
-
-      vi.spyOn(Math, "random").mockReturnValue(0); // force la poursuite
-      vi.advanceTimersByTime(700);
-
-      const calls = (socketA.send as ReturnType<typeof vi.fn>).mock.calls;
-      const lastMessage = JSON.parse(calls[calls.length - 1]![0] as string);
-      const bot = lastMessage.players.find((p: { id: string }) => p.id === "bot");
-      const blocker = lastMessage.players.find((p: { id: string }) => p.id === "p2");
-
-      // Blocker campe sa propre base : le bot ne peut pas s'y superposer, même
-      // en le pourchassant, et reste donc bloqué sur sa case de départ.
-      expect(bot).not.toMatchObject({ x: blocker.x, y: blocker.y });
-      expect(bot).toMatchObject({ x: 4, y: 1 });
     } finally {
       vi.useRealTimers();
       vi.restoreAllMocks();
@@ -337,16 +281,16 @@ describe("GameRoom", () => {
     it("broadcasts STATE (not END) while the score is still below winScore", () => {
       vi.useFakeTimers();
       try {
-        const room = new GameRoom("room-win-1", mapWithGoal, [], 2);
+        const room = new GameRoom("room-win-1", mapWithGoal, [], 2 * POINTS_PER_BASE);
         const socket = fakeSocket();
         room.join("p1", "Alice", socket);
 
-        scoreOnce(room); // score = 1, winScore = 2 : pas encore fini
+        scoreOnce(room); // une base atteinte, il en faut deux
 
         const calls = (socket.send as ReturnType<typeof vi.fn>).mock.calls;
         const last = JSON.parse(calls[calls.length - 1]![0] as string);
         expect(last.type).toBe("STATE");
-        expect(last.players[0]).toMatchObject({ score: 1 });
+        expect(last.players[0]).toMatchObject({ score: POINTS_PER_BASE });
       } finally {
         vi.useRealTimers();
       }
@@ -355,12 +299,12 @@ describe("GameRoom", () => {
     it("broadcasts END with the winner's id once winScore is reached", () => {
       vi.useFakeTimers();
       try {
-        const room = new GameRoom("room-win-2", mapWithGoal, [], 2);
+        const room = new GameRoom("room-win-2", mapWithGoal, [], 2 * POINTS_PER_BASE);
         const socket = fakeSocket();
         room.join("p1", "Alice", socket);
 
-        scoreOnce(room); // score = 1
-        scoreOnce(room); // score = 2 -> gagné
+        scoreOnce(room);
+        scoreOnce(room); // deuxième base -> gagné
 
         const calls = (socket.send as ReturnType<typeof vi.fn>).mock.calls;
         const last = JSON.parse(calls[calls.length - 1]![0] as string);
@@ -374,30 +318,56 @@ describe("GameRoom", () => {
       vi.useFakeTimers();
       try {
         const onEnd = vi.fn();
-        const room = new GameRoom("room-win-report", mapWithGoal, [], 2, {
+        const room = new GameRoom("room-win-report", mapWithGoal, [], 2 * POINTS_PER_BASE, {
           mapName: "#1 map 1v1",
+          mode: "duel",
           onEnd,
         });
         const socket = fakeSocket();
         room.join("p1", "Alice", socket, "anon-123");
 
-        scoreOnce(room); // score = 1
+        scoreOnce(room);
         expect(onEnd).not.toHaveBeenCalled();
 
-        scoreOnce(room); // score = 2 -> gagné
+        scoreOnce(room); // deuxième base -> gagné
 
         expect(onEnd).toHaveBeenCalledWith({
           mapName: "#1 map 1v1",
+          mode: "duel",
+          durationMs: expect.any(Number),
           players: [
             {
               anonId: "anon-123",
               name: "Alice",
               color: expect.any(String),
-              score: 2,
+              score: 2 * POINTS_PER_BASE,
               isWinner: true,
             },
           ],
         });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("chronomètre la partie à partir de l'entrée du premier joueur", () => {
+      // La salle est créée puis rejointe : cette latence ne doit pas être
+      // facturée au joueur dans le récapitulatif de la page Compte.
+      vi.useFakeTimers();
+      try {
+        const onEnd = vi.fn();
+        const room = new GameRoom("room-duree", mapWithGoal, [], 1, {
+          mapName: "Sans nom",
+          mode: "duel",
+          onEnd,
+        });
+        vi.advanceTimersByTime(5_000); // salle en attente, personne ne joue
+
+        room.join("p1", "Alice", fakeSocket());
+        scoreOnce(room); // base atteinte au 2e coup, 150 ms après l'entrée
+
+        // Les 5 s d'attente ne comptent pas : seul le temps joué est mesuré.
+        expect(onEnd.mock.calls[0]![0].durationMs).toBe(150);
       } finally {
         vi.useRealTimers();
       }
@@ -409,6 +379,7 @@ describe("GameRoom", () => {
         const onEnd = vi.fn();
         const room = new GameRoom("room-win-no-anon", mapWithGoal, [], 1, {
           mapName: "Sans nom",
+          mode: "duel",
           onEnd,
         });
         const socket = fakeSocket();
@@ -456,7 +427,7 @@ describe("GameRoom", () => {
         const calls = (socket.send as ReturnType<typeof vi.fn>).mock.calls;
         const last = JSON.parse(calls[calls.length - 1]![0] as string);
         expect(last.type).toBe("STATE");
-        expect(last.players[0]).toMatchObject({ score: 1 });
+        expect(last.players[0]).toMatchObject({ score: POINTS_PER_BASE });
       } finally {
         vi.useRealTimers();
       }
