@@ -14,6 +14,7 @@ function player(overrides: Partial<PlayerState> = {}): PlayerState {
     spawnX: 0,
     spawnY: 0,
     score: 0,
+    immuneForMs: 0,
     ...overrides,
   };
 }

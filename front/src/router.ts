@@ -22,6 +22,7 @@ const router = createRouter({
           name: "test-game",
           component: () => import("./pages/TestGame.vue"),
         },
+        { path: "classement", name: "ranking", component: () => import("./pages/Ranking.vue") },
         { path: "credits", name: "credits", component: () => import("./pages/Credits.vue") },
         { path: "options", name: "options", component: () => import("./pages/Options.vue") },
         { path: "inscription", name: "sign-up", component: () => import("./pages/SignUp.vue") },

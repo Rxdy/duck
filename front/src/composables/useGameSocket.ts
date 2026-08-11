@@ -1,5 +1,5 @@
 import { onMounted, onUnmounted } from "vue";
-import type { ClientMessage, Direction, ServerMessage } from "../types.js";
+import type { BotLevel, ClientMessage, Direction, GameMode, ServerMessage } from "../types.js";
 import { useGameStore } from "../store/gameStore.js";
 import { useSettingsStore } from "../store/settingsStore.js";
 import {
@@ -13,13 +13,18 @@ import { useAuthStore } from "../store/authStore.js";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_WS_URL ?? "ws://localhost:8080";
 
-export function useGameSocket(gameId: string, playerName: string) {
+export function useGameSocket(
+  gameId: string,
+  playerName: string,
+  mode: GameMode,
+  botLevel?: BotLevel,
+) {
   const store = useGameStore();
   const settings = useSettingsStore();
   const auth = useAuthStore();
   let socket: WebSocket | null = null;
 
-  onMounted(() => {
+  function connect() {
     socket = new WebSocket(SERVER_URL);
 
     socket.addEventListener("open", () => {
@@ -31,6 +36,8 @@ export function useGameSocket(gameId: string, playerName: string) {
         // Si connecté : permet au serveur de retrouver le skin équipé pour
         // l'afficher sur le canard (voir back/src/index.ts#resolveAccessory).
         token: auth.session?.token,
+        mode,
+        botLevel,
       });
       playArcadeStartJingle(settings.musicVolume);
       startAmbientLoop(settings.musicVolume);
@@ -40,6 +47,10 @@ export function useGameSocket(gameId: string, playerName: string) {
       const message = JSON.parse(event.data) as ServerMessage;
       if (message.type === "MAP") {
         store.setMap({ width: message.width, height: message.height, tiles: message.tiles });
+        return;
+      }
+      if (message.type === "ERROR") {
+        store.setError(message.message);
         return;
       }
       if (message.type === "END") {
@@ -55,7 +66,9 @@ export function useGameSocket(gameId: string, playerName: string) {
         if (anyoneScored) playScoreSfx(settings.sfxVolume);
       }
     });
-  });
+  }
+
+  onMounted(connect);
 
   onUnmounted(() => {
     socket?.close();
@@ -66,7 +79,19 @@ export function useGameSocket(gameId: string, playerName: string) {
     if (socket) send(socket, { type: "MOVE", direction });
   }
 
-  return { move };
+  /**
+   * Relance une partie dans le même mode : le serveur crée une salle neuve à
+   * chaque JOIN (voir back/src/index.ts), donc il faut vraiment refermer la
+   * connexion — la rouvrir est le seul moyen d'obtenir une nouvelle salle,
+   * avec sa carte tirée au sort et ses bots.
+   */
+  function restart() {
+    socket?.close();
+    store.reset();
+    connect();
+  }
+
+  return { move, restart };
 }
 
 function send(socket: WebSocket, message: ClientMessage) {

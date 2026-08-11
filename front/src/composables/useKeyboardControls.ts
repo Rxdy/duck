@@ -13,6 +13,14 @@ export function useKeyboardControls(move: (direction: Direction) => void) {
   const settings = useSettingsStore();
 
   function handleKeydown(event: KeyboardEvent) {
+    // Une touche MAINTENUE déclenche l'auto-repeat du système (~25-30
+    // keydown/s), soit bien plus qu'un joueur qui martèle la touche (~10-14/s).
+    // Sans ce filtre, ne rien faire battrait le fait de jouer vite : or c'est
+    // exactement l'inverse qu'on veut récompenser (voir
+    // docs/02-gameplay.md#rythme-de-déplacement). Une touche maintenue vaut
+    // donc un seul déplacement, il faut relâcher pour en refaire un.
+    if (event.repeat) return;
+
     const direction = directionForKey(event.code, settings.keyBindings);
     if (direction) move(direction);
   }
