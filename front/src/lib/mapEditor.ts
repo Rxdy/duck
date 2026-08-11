@@ -105,19 +105,24 @@ export function toWireTiles(map: EditorMap): string[][] {
 
 /**
  * Position de chaque spawn posé, dans l'ordre des couleurs (spawn-0, puis
- * spawn-1...), sans les couleurs non utilisées. Le serveur assigne les
- * joueurs dans cet ordre pour que la couleur du canard corresponde à la
- * couleur du spawn sur lequel il apparaît (voir back/src/room.ts).
+ * spawn-1...), avec l'indice de sa couleur dans PLAYER_COLORS.
+ *
+ * Cet indice est indispensable : les couleurs non posées sont absentes de la
+ * liste, donc la position d'un spawn dans le tableau ne dit RIEN de sa
+ * couleur. Une carte spawn-0/spawn-2/spawn-3 renverrait 3 entrées, et un
+ * serveur qui colorerait par ordre d'arrivée peindrait le canard du spawn
+ * ambre (spawn-2) en cyan — la case et le canard ne s'accorderaient plus
+ * (voir back/src/room.ts#addPlayer).
  */
-export function toWireSpawns(map: EditorMap): { x: number; y: number }[] {
-  const spawns: { x: number; y: number }[] = [];
-  for (const kind of SPAWN_KINDS) {
+export function toWireSpawns(map: EditorMap): { x: number; y: number; color: number }[] {
+  const spawns: { x: number; y: number; color: number }[] = [];
+  SPAWN_KINDS.forEach((kind, color) => {
     map.tiles.forEach((row, y) => {
       row.forEach((cell, x) => {
-        if (cell === kind) spawns.push({ x, y });
+        if (cell === kind) spawns.push({ x, y, color });
       });
     });
-  }
+  });
   return spawns;
 }
 
