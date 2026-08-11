@@ -12,8 +12,34 @@ concurrency:
 
 jobs:
   lint-test-build:
-    name: Lint, typecheck, test & build
+    name: Lint, typecheck, test & build (${{ matrix.service }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [front, back]
+    # Utilisé uniquement par back (voir back/src/db.test.ts, premier code base
+    # de données du projet) : les `services` ne peuvent pas être conditionnés
+    # par la matrice, le job front paie juste quelques secondes de démarrage
+    # inutilisées.
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: duck
+          POSTGRES_PASSWORD: duck
+          POSTGRES_DB: duck
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U duck -d duck"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: ${{ matrix.service }}
+    env:
+      DATABASE_URL: postgres://duck:duck@localhost:5432/duck
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,6 +49,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: ${{ matrix.service }}/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -37,7 +64,35 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm run test
+        run: npm test --if-present
 
       - name: Build
-        run: npm run build
+        run: npm run build --if-present
+
+  # Un seul verdict, sous le nom EXACT que la protection de branche exige.
+  #
+  # Passer le job en matrice a renommé ses résultats en « … (front) » et
+  # « … (back) » : le contexte requis « Lint, typecheck, test & build » n'était
+  # plus produit par personne, donc plus jamais satisfait. Les deux jobs
+  # pouvaient être verts, la pull request restait bloquée sur l'attente d'un
+  # check qui n'arriverait jamais — un verrou sans clé.
+  #
+  # Ce job agrège. Élargir la matrice (un troisième service, une version de
+  # Node) ne redemandera plus de toucher aux réglages de la branche.
+  gate:
+    name: Lint, typecheck, test & build
+    runs-on: ubuntu-latest
+    needs: lint-test-build
+    # `always()` est indispensable : sans lui, un échec de la matrice SAUTE ce
+    # job, et un check requis simplement absent laisserait la fusion possible.
+    # On veut l'inverse — un échec doit produire un verdict rouge, pas rien.
+    if: always()
+    steps:
+      - name: Verdict
+        run: |
+          result='${{ needs.lint-test-build.result }}'
+          if [ "$result" != "success" ]; then
+            echo "front ou back n'est pas vert (${result})." >&2
+            exit 1
+          fi
+          echo "front et back sont verts."
