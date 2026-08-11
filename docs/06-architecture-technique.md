@@ -120,33 +120,31 @@ Types de messages :
 | `END` | Fin de partie |
 | `PING` | Maintien de connexion |
 
-## Architecture du projet (monorepo)
+## Architecture du projet
+
+Trois dossiers indépendants à la racine (un par conteneur), pas de monorepo npm workspaces :
 
 ```
-apps/
-    client/
-    server/
-
-packages/
-    protocol/
-    game-engine/
-    map-generator/
-    editor/
-    shared/
+front/     client React — aucun code partagé avec le serveur, juste le protocole WebSocket
+back/      serveur + tout le reste (voir back/src/)
+    protocol.ts       types des messages WebSocket
+    shared.ts         types communs, constantes (couleurs joueurs...)
+    game-engine/      règles du jeu (déplacement, collisions, scores, conditions de victoire)
+    map-generator/    génération procédurale de cartes
+    editor/           logique de l'éditeur de cartes (pure, sans UI)
+db/        PostgreSQL, pas de code applicatif
 ```
 
-Le **game-engine** ne connaît ni React ni les WebSockets. Il contient uniquement les règles du jeu :
+Le **game-engine** ne connaît ni React ni les WebSockets. Il contient uniquement les règles du jeu.
 
-- déplacement
-- collisions
-- génération de cartes
-- scores
-- conditions de victoire
-
-Le serveur importe ce moteur pour faire tourner les parties, le client ne fait qu'afficher l'état reçu. Cette séparation :
+Le serveur importe ce moteur pour faire tourner les parties, le client ne fait qu'afficher l'état
+reçu. Cette séparation :
 
 - facilite les tests (le moteur est testable en isolation)
 - permet d'ajouter des modes de jeu sans toucher au réseau ou au rendu
-- garantit que les règles restent identiques partout (serveur, tests, bots — voir [idées futures](09-idees-futures.md))
+- garantit que les règles restent identiques côté serveur, tests, bots (voir [idées futures](09-idees-futures.md))
 
-Le moteur du jeu peut ainsi fonctionner : sur le serveur, en local, dans les tests.
+Le moteur du jeu peut ainsi fonctionner : sur le serveur, en local, dans les tests — tous **dans
+`back/`**. Le client (`front/`) ne partage aucun type avec le serveur ; il définit ses propres types
+de messages localement (`front/src/types.ts`), à garder manuellement synchronisés avec le protocole
+serveur (`back/src/protocol.ts`).

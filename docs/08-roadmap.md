@@ -13,4 +13,4 @@ Cette roadmap correspond au cœur du produit. Les fonctionnalités listées dans
 
 ## Point de départ suggéré
 
-Commencer par `packages/game-engine` (voir [architecture technique](06-architecture-technique.md#architecture-du-projet)) : c'est la brique la plus indépendante, testable sans serveur ni rendu, et tout le reste (serveur autoritaire, client, bots, replay) en dépend.
+Commencer par `back/src/game-engine` (voir [architecture technique](06-architecture-technique.md#architecture-du-projet)) : c'est la brique la plus indépendante, testable sans serveur ni rendu, et tout le reste (serveur autoritaire, client, bots, replay) en dépend.
