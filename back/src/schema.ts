@@ -1,4 +1,4 @@
-import { jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 /**
  * Reflète db/init/01-schema.sql — les deux doivent rester synchronisés à la
@@ -13,6 +13,11 @@ export const matches = pgTable("matches", {
   players: jsonb("players").notNull(),
   winnerAnonId: text("winner_anon_id"),
   playedAt: timestamp("played_at", { withTimezone: true }).notNull().defaultNow(),
+  // Mode et durée : nullables, parce que les parties enregistrées avant
+  // db/init/09-match-recap.sql n'ont jamais été chronométrées. Leur inventer
+  // une durée de zéro afficherait "0 s" sur des parties qui ont bien duré.
+  mode: text("mode"),
+  durationMs: integer("duration_ms"),
 });
 
 /**
@@ -30,6 +35,19 @@ export const accounts = pgTable("accounts", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   anonId: text("anon_id"),
+  // Classement Elo (voir back/src/rating.ts), mis à jour à chaque fin de
+  // partie. Démarre à zéro (db/init/08-starting-rating.sql) : un nouveau
+  // joueur ne peut rien perdre tant qu'il n'a rien gagné.
+  rating: integer("rating").notNull().default(0),
+  // "human" ou "bot" (voir back/src/botAccounts.ts). Jamais transmis au
+  // client : un joueur ne doit pas pouvoir dire, en regardant l'interface,
+  // s'il affronte un humain. Reflète db/init/07-bot-accounts.sql.
+  role: text("role").notNull().default("human"),
+  // Niveau de jeu d'un bot (clé de bots.ts#BOT_LEVELS), NULL pour un humain.
+  // C'est son intelligence, fixée à la création et jamais réécrite : le
+  // classement bouge avec les résultats, le cerveau non. Reflète
+  // db/init/11-bot-level.sql.
+  level: text("level"),
   equippedSkinId: uuid("equipped_skin_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -70,3 +88,25 @@ export const accountSkins = pgTable(
   },
   (table) => [primaryKey({ columns: [table.accountId, table.skinId] })],
 );
+
+/**
+ * Reflète db/init/05-maps.sql. Une seule table pour les cartes des joueurs et
+ * les cartes officielles, distinguées par `kind` : ce sont les mêmes données
+ * (une grille), seule leur provenance et leur usage diffèrent. `spawnCount`
+ * est dérivé de la grille à l'enregistrement (voir back/src/maps.ts) et
+ * stocké pour pouvoir choisir une carte par mode sans la relire.
+ */
+export const maps = pgTable("maps", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  kind: text("kind").notNull().default("player"),
+  // NULL uniquement pour une carte officielle : celle d'un joueur a toujours
+  // un compte propriétaire (sauvegarder exige d'être connecté).
+  ownerAccountId: uuid("owner_account_id").references(() => accounts.id, { onDelete: "cascade" }),
+  spawnCount: integer("spawn_count").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  tiles: jsonb("tiles").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
