@@ -7,39 +7,46 @@ const router = createRouter({
   history: createMemoryHistory(),
   routes: [
     { path: "/", component: { template: "<div/>" } },
-    { path: "/canard", component: { template: "<div/>" } },
     { path: "/compte", component: { template: "<div/>" } },
+    { path: "/connexion", component: { template: "<div/>" } },
   ],
 });
 
+function mountHeader(username?: string) {
+  return mount(AppHeader, { props: { username }, global: { plugins: [router] } });
+}
+
 describe("AppHeader", () => {
-  it("links the logo home and the avatar button to /canard when logged out", () => {
-    const wrapper = mount(AppHeader, { global: { plugins: [router] } });
-    const links = wrapper.findAllComponents(RouterLink);
-    expect(links.map((l) => l.props("to"))).toEqual(["/", "/canard"]);
+  it("n'expose qu'UNE porte vers le compte, pas deux", () => {
+    // Il y avait avant une pastille d'initiale ET une vignette canard menant
+    // aux skins : deux boutons pour la même destination, sans qu'on sache
+    // lequel mène où.
+    const wrapper = mountHeader("deeps");
+    const destinations = wrapper.findAllComponents(RouterLink).map((l) => l.props("to"));
+    expect(destinations).toEqual(["/", "/compte"]);
   });
 
-  it("has an accessible label on the duck profile button", () => {
-    const wrapper = mount(AppHeader, { global: { plugins: [router] } });
-    expect(wrapper.find('[aria-label="Mon canard"]').exists()).toBe(true);
+  it("affiche le pseudo à côté de l'icône quand on est connecté", () => {
+    const wrapper = mountHeader("deeps");
+    expect(wrapper.find('[aria-label="Profil de deeps"]').exists()).toBe(true);
+    expect(wrapper.text()).toContain("deeps");
   });
 
-  it("does not show an account link when logged out", () => {
-    const wrapper = mount(AppHeader, { global: { plugins: [router] } });
-    expect(wrapper.find('[aria-label="Mon compte"]').exists()).toBe(false);
+  it("mène à la connexion quand personne n'est connecté", () => {
+    const wrapper = mountHeader();
+    const destinations = wrapper.findAllComponents(RouterLink).map((l) => l.props("to"));
+    expect(destinations).toEqual(["/", "/connexion"]);
+    expect(wrapper.find('[aria-label="Se connecter"]').exists()).toBe(true);
   });
 
-  it("shows an account link with the username's initial when logged in", () => {
-    const wrapper = mount(AppHeader, {
-      props: { username: "deeps" },
-      global: { plugins: [router] },
-    });
+  it("propose la déconnexion, mais seulement une fois connecté", () => {
+    expect(mountHeader().find('[aria-label="Se déconnecter"]').exists()).toBe(false);
+    expect(mountHeader("deeps").find('[aria-label="Se déconnecter"]').exists()).toBe(true);
+  });
 
-    const accountLink = wrapper.find('[aria-label="Mon compte"]');
-    expect(accountLink.exists()).toBe(true);
-    expect(accountLink.text()).toBe("d");
-
-    const links = wrapper.findAllComponents(RouterLink);
-    expect(links.map((l) => l.props("to"))).toEqual(["/", "/compte", "/canard"]);
+  it("laisse la page décider quoi faire de la déconnexion", async () => {
+    const wrapper = mountHeader("deeps");
+    await wrapper.find('[aria-label="Se déconnecter"]').trigger("click");
+    expect(wrapper.emitted("logout")).toHaveLength(1);
   });
 });
