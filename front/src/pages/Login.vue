@@ -36,7 +36,7 @@ async function handleSubmit() {
         required
         placeholder="Email ou pseudo"
         autocomplete="username"
-        class="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40"
+        class="rounded-lg border border-ink/10 bg-ink/10 px-3 py-2 text-sm text-ink placeholder:text-ink/40"
       />
       <input
         v-model="password"
@@ -44,7 +44,7 @@ async function handleSubmit() {
         required
         placeholder="Mot de passe"
         autocomplete="current-password"
-        class="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40"
+        class="rounded-lg border border-ink/10 bg-ink/10 px-3 py-2 text-sm text-ink placeholder:text-ink/40"
       />
 
       <p v-if="error" class="text-center text-xs text-amber-400">{{ error }}</p>
@@ -53,13 +53,13 @@ async function handleSubmit() {
         type="submit"
         :disabled="submitting"
         class="rounded-lg px-4 py-2 text-sm font-semibold transition active:scale-95"
-        :class="submitting ? 'bg-white/10 text-white/40' : 'bg-cyan-500 text-slate-950'"
+        :class="submitting ? 'bg-ink/10 text-ink/40' : 'bg-cyan-500 text-slate-950'"
       >
         {{ submitting ? "Connexion..." : "Se connecter" }}
       </button>
     </form>
 
-    <p class="text-center text-sm text-white/50">
+    <p class="text-center text-sm text-ink/50">
       Pas de compte ?
       <RouterLink to="/inscription" class="text-cyan-400">S'inscrire</RouterLink>
     </p>

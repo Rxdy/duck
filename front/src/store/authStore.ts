@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { login as loginApi, register as registerApi } from "../lib/authApi.js";
-import { getOrCreateAnonId } from "../lib/anonId.js";
+import { getOrCreateAnonId, renewAnonId } from "../lib/anonId.js";
 import { clearSession, loadSession, persistSession, type Session } from "../lib/session.js";
 
 export const useAuthStore = defineStore("auth", {
@@ -15,6 +15,10 @@ export const useAuthStore = defineStore("auth", {
     async register(username: string, email: string, password: string): Promise<string | undefined> {
       const result = await registerApi(username, email, password, getOrCreateAnonId());
       if ("error" in result) return result.error;
+      // L'identité anonyme vient d'être revendiquée par ce compte : le
+      // navigateur ne doit plus la proposer au suivant créé ici, sinon deux
+      // comptes distincts partagent le même historique de parties.
+      renewAnonId();
       this.session = result;
       persistSession(result);
       return undefined;

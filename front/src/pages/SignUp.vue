@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
+import PasswordStrength from "../components/molecules/PasswordStrength.vue";
+import { isPasswordAccepted, MIN_LENGTH } from "../lib/passwordStrength.js";
 import { useAuthStore } from "../store/authStore.js";
 
 const router = useRouter();
@@ -13,8 +15,20 @@ const confirmPassword = ref("");
 const error = ref<string | null>(null);
 const submitting = ref(false);
 
+/**
+ * La jauge n'est affichée qu'ici, à l'inscription : c'est le seul moment où le
+ * joueur CHOISIT son mot de passe. À la connexion, elle ne ferait que noter un
+ * mot de passe déjà choisi, sans rien lui permettre d'y changer.
+ */
+const strongEnough = computed(() => isPasswordAccepted(password.value));
+
 async function handleSubmit() {
   error.value = null;
+
+  if (!strongEnough.value) {
+    error.value = "Mot de passe trop faible.";
+    return;
+  }
 
   if (password.value !== confirmPassword.value) {
     error.value = "Les mots de passe ne correspondent pas.";
@@ -46,7 +60,7 @@ async function handleSubmit() {
         maxlength="20"
         placeholder="Pseudo"
         autocomplete="username"
-        class="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40"
+        class="rounded-lg border border-ink/10 bg-ink/10 px-3 py-2 text-sm text-ink placeholder:text-ink/40"
       />
       <input
         v-model="email"
@@ -54,39 +68,42 @@ async function handleSubmit() {
         required
         placeholder="Email"
         autocomplete="email"
-        class="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40"
+        class="rounded-lg border border-ink/10 bg-ink/10 px-3 py-2 text-sm text-ink placeholder:text-ink/40"
       />
       <input
         v-model="password"
         type="password"
         required
-        minlength="8"
-        placeholder="Mot de passe (8 caractères min.)"
+        :minlength="MIN_LENGTH"
+        :placeholder="`Mot de passe (${MIN_LENGTH} caractères min.)`"
         autocomplete="new-password"
-        class="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40"
+        class="rounded-lg border border-ink/10 bg-ink/10 px-3 py-2 text-sm text-ink placeholder:text-ink/40"
       />
+      <PasswordStrength :password="password" />
       <input
         v-model="confirmPassword"
         type="password"
         required
         placeholder="Confirmer le mot de passe"
         autocomplete="new-password"
-        class="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/40"
+        class="rounded-lg border border-ink/10 bg-ink/10 px-3 py-2 text-sm text-ink placeholder:text-ink/40"
       />
 
       <p v-if="error" class="text-center text-xs text-amber-400">{{ error }}</p>
 
       <button
         type="submit"
-        :disabled="submitting"
+        :disabled="submitting || !strongEnough"
         class="rounded-lg px-4 py-2 text-sm font-semibold transition active:scale-95"
-        :class="submitting ? 'bg-white/10 text-white/40' : 'bg-cyan-500 text-slate-950'"
+        :class="
+          submitting || !strongEnough ? 'bg-ink/10 text-ink/40' : 'bg-cyan-500 text-slate-950'
+        "
       >
         {{ submitting ? "Création..." : "Créer mon compte" }}
       </button>
     </form>
 
-    <p class="text-center text-sm text-white/50">
+    <p class="text-center text-sm text-ink/50">
       Déjà un compte ?
       <RouterLink to="/connexion" class="text-cyan-400">Se connecter</RouterLink>
     </p>
