@@ -12,4 +12,10 @@ export interface Player {
   spawnX: number;
   spawnY: number;
   score: number;
+  // Instant (epoch ms) jusqu'auquel le joueur est intouchable, après un
+  // retour au spawn (touché ou point marqué). 0 = pas d'immunité. Voir
+  // game.ts#applyMove : elle est purement DÉFENSIVE — un joueur immunisé ne
+  // peut pas non plus toucher les autres, sinon réapparaître deviendrait une
+  // arme gratuite contre celui qui campe la sortie.
+  immuneUntil: number;
 }
