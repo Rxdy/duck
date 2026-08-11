@@ -10,7 +10,7 @@ defineProps<{
 <template>
   <RouterLink
     :to="to"
-    class="menu-card group relative block overflow-hidden rounded-xl border-l-4 border-white/10 bg-white/5 px-5 py-4 text-left backdrop-blur-sm transition active:scale-[0.98]"
+    class="menu-card group relative block overflow-hidden rounded-xl border-l-4 border-ink/10 bg-ink/5 px-5 py-4 text-left backdrop-blur-sm transition active:scale-[0.98]"
     :style="{ borderLeftColor: accent, '--accent': accent }"
   >
     <span class="fill pointer-events-none absolute inset-0" aria-hidden="true" />
@@ -20,7 +20,7 @@ defineProps<{
       {{ label }}
     </div>
     <div
-      class="relative text-sm text-white/60 transition-colors duration-300 group-hover:text-slate-950/70"
+      class="relative text-sm text-ink/60 transition-colors duration-300 group-hover:text-slate-950/70"
     >
       {{ description }}
     </div>

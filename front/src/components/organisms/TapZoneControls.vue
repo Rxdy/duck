@@ -46,7 +46,7 @@ function handleTap(event: MouseEvent) {
     <span
       v-for="ripple in ripples"
       :key="ripple.id"
-      class="tap-ripple pointer-events-none absolute h-12 w-12 rounded-full bg-white/40"
+      class="tap-ripple pointer-events-none absolute h-12 w-12 rounded-full bg-ink/40"
       :style="{ left: `${ripple.x}px`, top: `${ripple.y}px` }"
     />
   </div>

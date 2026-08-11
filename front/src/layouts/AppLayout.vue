@@ -6,8 +6,8 @@ const auth = useAuthStore();
 </script>
 
 <template>
-  <div class="flex h-dvh w-dvw flex-col bg-slate-950 text-white">
-    <AppHeader :username="auth.session?.username" />
+  <div class="flex h-dvh w-dvw flex-col bg-surface-deep text-ink">
+    <AppHeader :username="auth.session?.username" @logout="auth.logout()" />
 
     <main class="min-h-0 flex-1">
       <RouterView />
