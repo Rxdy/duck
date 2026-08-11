@@ -33,6 +33,18 @@ describe("buildBoardTiles", () => {
 });
 
 describe("computeIsometricFrame", () => {
+  it("serre le cadrage quand on réduit `fit`", () => {
+    // Seul levier pour qu'un plateau remplisse son cadre : la hauteur du
+    // conteneur n'y change rien, la caméra orthographique montre toujours la
+    // même tranche de monde en vertical (voir molecules/MapPreviewList.vue).
+    const partie = computeIsometricFrame(20, 12);
+    const apercu = computeIsometricFrame(20, 12, 0.44);
+
+    expect(apercu.viewSize).toBeLessThan(partie.viewSize);
+    expect(apercu.target).toEqual(partie.target);
+    expect(apercu.position).toEqual(partie.position);
+  });
+
   it("targets the center of the board", () => {
     expect(computeIsometricFrame(30, 30).target).toEqual([15, 0, 15]);
     expect(computeIsometricFrame(40, 20).target).toEqual([20, 0, 10]);

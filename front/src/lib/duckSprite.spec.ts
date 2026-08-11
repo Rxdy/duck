@@ -1,31 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { drawDuckSprite, duckSpriteAspect } from "./duckSprite.js";
+import { PLAYER_COLORS } from "../theme.js";
+import { COLORBLIND_PLAYER_COLORS } from "./colorblind.js";
+import { duckSpriteUrl } from "./duckSprite.js";
 
-describe("duckSpriteAspect", () => {
-  it("is roughly square (the duck is squat/compact, not tall and slim)", () => {
-    expect(duckSpriteAspect()).toBeCloseTo(1, 1);
-  });
-});
+const FACINGS = ["se", "sw", "ne", "nw"] as const;
 
-describe("drawDuckSprite", () => {
-  it("returns a canvas without throwing, even without a 2D context (jsdom)", () => {
-    expect(() => drawDuckSprite("#E11D48", "none", "approach")).not.toThrow();
-    expect(() => drawDuckSprite("#E11D48", "none", "back")).not.toThrow();
-  });
-
-  it("caches by color+accessory+view: same inputs return the exact same canvas", () => {
-    const first = drawDuckSprite("#2563EB", "top-hat", "approach");
-    const second = drawDuckSprite("#2563EB", "top-hat", "approach");
-    expect(second).toBe(first);
+describe("duckSpriteUrl", () => {
+  it("a un sprite pour chaque couleur de joueur et chaque direction", () => {
+    for (const color of [...PLAYER_COLORS, ...COLORBLIND_PLAYER_COLORS]) {
+      for (const facing of FACINGS) {
+        expect(duckSpriteUrl(color, facing), `${color} ${facing}`).toBeTruthy();
+      }
+    }
   });
 
-  it("does not share a cache entry across different colors, accessories, or views", () => {
-    const red = drawDuckSprite("#E11D48", "none", "approach");
-    const blue = drawDuckSprite("#2563EB", "none", "approach");
-    const redWithCap = drawDuckSprite("#E11D48", "cap", "approach");
-    const redBack = drawDuckSprite("#E11D48", "none", "back");
-    expect(red).not.toBe(blue);
-    expect(red).not.toBe(redWithCap);
-    expect(red).not.toBe(redBack);
+  it("donne une image différente par direction", () => {
+    const urls = FACINGS.map((facing) => duckSpriteUrl(PLAYER_COLORS[0], facing));
+    expect(new Set(urls).size).toBe(FACINGS.length);
+  });
+
+  it("ignore la casse et le # de la couleur", () => {
+    expect(duckSpriteUrl("#ff4d6d", "se")).toBe(duckSpriteUrl("FF4D6D", "se"));
+  });
+
+  it("retombe sur la couleur générée la plus proche plutôt que sur rien", () => {
+    // #00C2D1 (cyan joueur) est la couleur générée la plus proche de ce cyan
+    // légèrement différent, qu'aucun jeu de sprites ne couvre.
+    expect(duckSpriteUrl("#00C4D4", "se")).toBe(duckSpriteUrl("#00C2D1", "se"));
+  });
+
+  it("reste affichable même si la couleur n'a aucun sens", () => {
+    expect(duckSpriteUrl("pas-une-couleur", "se")).toBeTruthy();
   });
 });
