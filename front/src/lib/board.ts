@@ -18,14 +18,39 @@ export function buildBoardTiles(width: number, height: number): BoardTile[] {
 }
 
 /**
+ * Palettes du plateau. Le rendu 3D ne peut pas hériter des variables CSS du
+ * thème : ses couleurs partent dans des matériaux WebGL, pas dans du style.
+ * Elles sont donc dupliquées ici, et choisies au moment du rendu.
+ */
+const BOARD_PALETTE = {
+  dark: { wall: "#6b7280", floorLight: "#33415b", floorDark: "#28374d", background: "#020617" },
+  light: { wall: "#94a3b8", floorLight: "#dbe3ef", floorDark: "#c8d3e2", background: "#f1f5f9" },
+} as const;
+
+export type BoardTheme = keyof typeof BOARD_PALETTE;
+
+/** Couleur de fond du canvas, derrière le plateau. */
+export function boardBackground(theme: BoardTheme = "dark"): string {
+  return BOARD_PALETTE[theme].background;
+}
+
+/**
  * Couleur d'une case : couleur pleine et distincte pour mur/spawn, sinon le
  * damier par défaut (cases "vides", ou aucune donnée d'éditeur fournie —
  * cas de l'aperçu pendant une partie en cours).
+ *
+ * Les couleurs de spawn, elles, ne changent pas avec le thème : ce sont les
+ * couleurs des JOUEURS, elles doivent rester reconnaissables partout.
  */
-export function tileColor(kind: TileKind | undefined, shade: "light" | "dark"): string {
-  if (kind === "wall") return "#6b7280";
+export function tileColor(
+  kind: TileKind | undefined,
+  shade: "light" | "dark",
+  theme: BoardTheme = "dark",
+): string {
+  const palette = BOARD_PALETTE[theme];
+  if (kind === "wall") return palette.wall;
   if (kind && isSpawnKind(kind)) return spawnColor(kind);
-  return shade === "light" ? "#33415b" : "#28374d";
+  return shade === "light" ? palette.floorLight : palette.floorDark;
 }
 
 /**
@@ -162,6 +187,31 @@ export interface BoardPreset {
  * que pour les modes à 4 joueurs (2v2, FFA4), qui restent proches du carré, 20x20 max
  * pour l'instant. Les cartes plus grandes viendront plus tard.
  */
+/**
+ * Bornes d'une taille jouable saisie à la main dans l'éditeur (hors murs du
+ * contour, comme les presets ci-dessous). Le maximum n'est pas une limite du
+ * moteur mais du RENDU : BoardPreview dessine un mesh par case (voir
+ * organisms/BoardPreview.vue), donc 30x30 jouable = ~1000 objets à l'écran,
+ * déjà lourd sur mobile. Aller au-delà demandera un rendu instancié, pas
+ * seulement de changer ce nombre.
+ */
+export const MIN_PLAYABLE_SIZE = 5;
+export const MAX_PLAYABLE_SIZE = 30;
+
+/** Valeur du sélecteur de taille quand la carte ne correspond à aucun preset. */
+export const CUSTOM_SIZE_ID = "custom";
+
+/** Vrai si une taille jouable saisie à la main est acceptable. */
+export function isPlayableSize(value: number): boolean {
+  return Number.isInteger(value) && value >= MIN_PLAYABLE_SIZE && value <= MAX_PLAYABLE_SIZE;
+}
+
+/** Ramène une taille saisie dans les bornes, pour un champ de saisie libre. */
+export function clampPlayableSize(value: number): number {
+  if (!Number.isFinite(value)) return MIN_PLAYABLE_SIZE;
+  return Math.min(MAX_PLAYABLE_SIZE, Math.max(MIN_PLAYABLE_SIZE, Math.round(value)));
+}
+
 export const BOARD_PRESETS: BoardPreset[] = [
   { id: "duel-s", label: "S", category: "duel", width: 11, height: 7 },
   { id: "duel-m", label: "M", category: "duel", width: 15, height: 9 },
@@ -182,8 +232,17 @@ export interface CameraFrame {
  * Cadrage isométrique (position caméra + cible + demi-hauteur de vue orthographique)
  * pour qu'un plateau width x height tienne entièrement dans le cadre, quelle que
  * soit sa taille. Utilisé pour le rendu d'une partie en cours.
+ *
+ * `fit` est cette demi-hauteur, relative à la diagonale du plateau : plus il
+ * est petit, plus le plateau remplit le cadre. La valeur par défaut laisse de
+ * la marge autour, nécessaire EN PARTIE (les canards dépassent des cases, et
+ * on ne veut pas jouer collé aux bords) mais inutile pour un simple aperçu.
+ *
+ * C'est le seul levier : réduire la hauteur du conteneur ne change rien, la
+ * caméra orthographique montre toujours la même tranche de monde en vertical
+ * et n'ajuste que les marges horizontales.
  */
-export function computeIsometricFrame(width: number, height: number): CameraFrame {
+export function computeIsometricFrame(width: number, height: number, fit = 0.62): CameraFrame {
   const centerX = width / 2;
   const centerZ = height / 2;
   const diagonal = Math.sqrt(width * width + height * height);
@@ -193,7 +252,7 @@ export function computeIsometricFrame(width: number, height: number): CameraFram
     position: [centerX + offset, offset, centerZ + offset],
     target: [centerX, 0, centerZ],
     up: [0, 1, 0],
-    viewSize: diagonal * 0.62,
+    viewSize: diagonal * fit,
   };
 }
 

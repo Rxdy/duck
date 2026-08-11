@@ -2,8 +2,10 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { OrthographicCamera, Plane, Raycaster, Vector2, Vector3 } from "three";
 import { TresCanvas } from "@tresjs/core";
+import { useSettingsStore } from "../../store/settingsStore.js";
 import {
   applyTerritoryTint,
+  boardBackground,
   buildBoardTiles,
   computeIsometricFrame,
   computeTopDownFrame,
@@ -25,9 +27,13 @@ const props = withDefaults(
       x: number;
       y: number;
       color: string;
-      // Accessoire cosmétique équipé (voir lib/duckAccessories.ts). Absent
-      // -> aucun accessoire affiché (bot, joueur non connecté...).
+      // Accessoire cosmétique équipé (voir lib/duckAccessories.ts). Pas encore
+      // dessiné sur le canard : les sprites (voir DuckSprite.vue) n'en ont pas
+      // de version, il faudra une image d'accessoire par direction.
       accessory?: string;
+      // Millisecondes d'intouchabilité restantes (voir back/src/game-engine/
+      // game.ts) : fait clignoter le canard concerné.
+      immuneForMs?: number;
       // Position de la base du joueur : sert à teinter le sol alentour
       // (voir applyTerritoryTint). Absent -> pas de territoire affiché.
       spawnX?: number;
@@ -41,17 +47,27 @@ const props = withDefaults(
     tiles?: { x: number; y: number; kind: TileKind }[];
     // Active le clic pour poser un élément (éditeur uniquement).
     editable?: boolean;
+    // Serre ou desserre le cadrage isométrique (voir board.ts#computeIsometricFrame).
+    // Par défaut : la marge confortable d'une partie en cours.
+    fit?: number;
   }>(),
   { mode: "isometric", editable: false },
 );
 
 const emit = defineEmits<{ tileClick: [x: number, y: number] }>();
 
-const DUCK_SIZE = 0.8;
+// Le plateau suit le thème de l'interface : un rectangle noir au milieu d'un
+// écran clair se lit comme une image qui n'a pas chargé.
+const settings = useSettingsStore();
+const boardTheme = computed(() => settings.theme);
+
+// Hauteur du sprite du canard (voir DuckSprite.vue), un peu plus d'une case :
+// en dessous, le personnage se lit comme un simple pion posé sur le plateau.
+const DUCK_HEIGHT = 1.05;
 const FLOOR_HEIGHT = 0.25;
 // Un mur qui dépasse la hauteur du canard gênerait la lecture du jeu vu de
-// dessus/en isométrique : on reste sous sa taille, ici la moitié.
-const WALL_HEIGHT = DUCK_SIZE / 2;
+// dessus/en isométrique : on reste nettement en dessous.
+const WALL_HEIGHT = 0.4;
 
 const territoryBases = computed<TerritoryBase[]>(
   () =>
@@ -70,7 +86,7 @@ const renderTiles = computed(() => {
   return buildBoardTiles(props.width, props.height).map((t) => {
     const kind = overrides.get(`${t.x},${t.y}`);
     const height = kind === "wall" ? WALL_HEIGHT : FLOOR_HEIGHT;
-    const baseColor = tileColor(kind, t.shade);
+    const baseColor = tileColor(kind, t.shade, boardTheme.value);
     // Le territoire ne doit pas recolorer un mur ou un spawn : seules les
     // cases neutres (pas de kind, ou "empty") en reçoivent la teinte.
     const isNeutralFloor = kind === undefined || kind === "empty";
@@ -116,12 +132,8 @@ watch(
     for (const p of players ?? []) {
       const last = lastPositionByPlayerId.get(p.id);
       if (!last) {
-        // "se" (pose non retournée) plutôt que "sw" (retournée en miroir) :
-        // évite un bug d'affichage constaté où un sprite créé avec une
-        // échelle X négative dès son premier rendu (avant toute vraie mise
-        // à jour réactive) ignore ce retournement jusqu'au prochain
-        // changement de props — en partant d'une pose jamais retournée, ce
-        // cas ne se présente simplement jamais.
+        // Premier affichage : "se" par défaut, une pose de face plutôt que de
+        // dos — on veut voir le canard au moment où il apparaît.
         facingByPlayerId.value.set(p.id, "se");
       } else if (last.x !== p.x || last.y !== p.y) {
         const facing = directionFacing(p.x - last.x, p.y - last.y);
@@ -152,16 +164,34 @@ const containerRef = ref<HTMLElement | null>(null);
 const containerAspect = ref(1);
 let resizeObserver: ResizeObserver | undefined;
 
+/**
+ * Format de conteneur pour lequel les cadrages de board.ts sont calibrés. En
+ * dessous (conteneur plus haut que large : téléphone en portrait, aperçu en
+ * colonne), la caméra orthographique ne montre QUE `viewSize * aspect` en
+ * largeur — le plateau, plus large que haut à l'écran, se retrouve coupé sur
+ * les côtés. On élargit alors la vue d'autant.
+ *
+ * Valeurs empiriques, vérifiées à l'écran. Le cadrage exact consisterait à
+ * projeter les quatre coins du plateau dans le repère caméra et à ajuster au
+ * plus juste : plus rien à calibrer, et plus de marge perdue en portrait —
+ * mais ça touche des fonctions de board.ts utilisées partout, à faire à
+ * froid plutôt qu'en passant.
+ */
+const CALIBRATED_ASPECT = { isometric: 1.4, topDown: 1 } as const;
+
 function updateCamera() {
   const frame =
     props.mode === "topDown"
       ? computeTopDownFrame(props.width, props.height)
-      : computeIsometricFrame(props.width, props.height);
+      : computeIsometricFrame(props.width, props.height, props.fit);
 
-  camera.left = -frame.viewSize * containerAspect.value;
-  camera.right = frame.viewSize * containerAspect.value;
-  camera.top = frame.viewSize;
-  camera.bottom = -frame.viewSize;
+  const aspect = containerAspect.value;
+  const viewSize = frame.viewSize * Math.max(1, CALIBRATED_ASPECT[props.mode] / aspect);
+
+  camera.left = -viewSize * aspect;
+  camera.right = viewSize * aspect;
+  camera.top = viewSize;
+  camera.bottom = -viewSize;
   camera.near = 0.1;
   camera.far = 1000;
   camera.up.set(...frame.up);
@@ -184,7 +214,9 @@ onMounted(() => {
 onUnmounted(() => resizeObserver?.disconnect());
 
 // Recadre à chaque changement de taille ou de mode de vue.
-watch([() => props.width, () => props.height, () => props.mode], updateCamera, { immediate: true });
+watch([() => props.width, () => props.height, () => props.mode, () => props.fit], updateCamera, {
+  immediate: true,
+});
 
 // Clic -> case du plateau, via un rayon caméra/souris intersecté avec le sol
 // (robuste quel que soit l'angle/type de caméra, contrairement à un calcul
@@ -211,7 +243,12 @@ function handleClick(event: MouseEvent) {
 
 <template>
   <div ref="containerRef" class="h-full w-full" @click="handleClick">
-    <TresCanvas v-if="webglAvailable" :camera="camera" shadows>
+    <TresCanvas
+      v-if="webglAvailable"
+      :camera="camera"
+      :clear-color="boardBackground(boardTheme)"
+      shadows
+    >
       <!-- Une ambiante trop forte aplatit tout (chaque face reçoit la même
            lumière peu importe son orientation) : baissée au profit d'une
            directionnelle plus marquée + son ombre portée, qui sont ce qui
@@ -232,22 +269,22 @@ function handleClick(event: MouseEvent) {
       <TresGroup
         v-for="player in props.players ?? []"
         :key="player.id"
-        :position="[player.x + 0.5, DUCK_SIZE / 2, player.y + 0.5]"
+        :position="[player.x + 0.5, DUCK_HEIGHT / 2, player.y + 0.5]"
       >
         <DuckSprite
           :color="player.color"
-          :accessory="player.accessory"
-          :size="DUCK_SIZE"
+          :size="DUCK_HEIGHT"
           :facing="facingByPlayerId.get(player.id) ?? 'se'"
+          :immune-for-ms="player.immuneForMs ?? 0"
         />
       </TresGroup>
     </TresCanvas>
 
     <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
-      <p class="text-sm text-white/60">
+      <p class="text-sm text-ink/60">
         Le rendu 3D n'est pas disponible dans ce navigateur (WebGL désactivé ou non supporté).
       </p>
-      <p class="text-xs text-white/40">
+      <p class="text-xs text-ink/40">
         Essaie d'ouvrir la page dans un navigateur avec l'accélération matérielle activée.
       </p>
     </div>
