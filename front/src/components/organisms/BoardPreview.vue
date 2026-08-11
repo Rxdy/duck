@@ -4,14 +4,13 @@ import { OrthographicCamera, Plane, Raycaster, Vector2, Vector3 } from "three";
 import { TresCanvas } from "@tresjs/core";
 import { useSettingsStore } from "../../store/settingsStore.js";
 import {
-  applyTerritoryTint,
   boardBackground,
-  buildBoardTiles,
+  buildBoardMeshes,
   computeIsometricFrame,
   computeTopDownFrame,
   directionFacing,
   isWebglAvailable,
-  tileColor,
+  TILE_SIZE,
   type Facing,
   type TerritoryBase,
 } from "../../lib/board.js";
@@ -64,10 +63,6 @@ const boardTheme = computed(() => settings.theme);
 // Hauteur du sprite du canard (voir DuckSprite.vue), un peu plus d'une case :
 // en dessous, le personnage se lit comme un simple pion posé sur le plateau.
 const DUCK_HEIGHT = 1.05;
-const FLOOR_HEIGHT = 0.25;
-// Un mur qui dépasse la hauteur du canard gênerait la lecture du jeu vu de
-// dessus/en isométrique : on reste nettement en dessous.
-const WALL_HEIGHT = 0.4;
 
 const territoryBases = computed<TerritoryBase[]>(
   () =>
@@ -79,45 +74,18 @@ const territoryBases = computed<TerritoryBase[]>(
       .map((p) => ({ x: p.spawnX, y: p.spawnY, color: p.color })) ?? [],
 );
 
-const renderTiles = computed(() => {
-  const overrides = new Map(props.tiles?.map((t) => [`${t.x},${t.y}`, t.kind]));
-  const isWallAt = (x: number, y: number) => overrides.get(`${x},${y}`) === "wall";
-
-  return buildBoardTiles(props.width, props.height).map((t) => {
-    const kind = overrides.get(`${t.x},${t.y}`);
-    const height = kind === "wall" ? WALL_HEIGHT : FLOOR_HEIGHT;
-    const baseColor = tileColor(kind, t.shade, boardTheme.value);
-    // Le territoire ne doit pas recolorer un mur ou un spawn : seules les
-    // cases neutres (pas de kind, ou "empty") en reçoivent la teinte.
-    const isNeutralFloor = kind === undefined || kind === "empty";
-
-    // En partie réelle (voir Game.vue), le serveur ne transmet qu'un "Spawn"
-    // générique sans couleur (mapEditor.ts#wireTileToKind) : la case exacte
-    // à toucher pour marquer serait donc invisible sans ça. On la peint dans
-    // la couleur pleine du joueur, exactement comme le fait déjà l'éditeur
-    // pour ses tuiles "spawn-N" — le halo de territoire, lui, reste réservé
-    // aux cases alentour.
-    const exactBase = isNeutralFloor
-      ? territoryBases.value.find((b) => b.x === t.x && b.y === t.y)
-      : undefined;
-
-    const color = exactBase
-      ? exactBase.color
-      : isNeutralFloor && territoryBases.value.length > 0
-        ? applyTerritoryTint(baseColor, t.x, t.y, territoryBases.value, isWallAt)
-        : baseColor;
-
-    return {
-      x: t.x,
-      y: t.y,
-      color,
-      height,
-      // Toutes les cases partagent la même base (-FLOOR_HEIGHT) : un mur pousse
-      // vers le haut depuis le sol au lieu de flotter ou d'être enterré.
-      centerY: -FLOOR_HEIGHT + height / 2,
-    };
-  });
-});
+// La lecture de la carte vit dans board.ts, partagée avec les vignettes de
+// « Mes cartes » (voir lib/mapThumbnail.ts) : une vignette qui ne montre pas
+// exactement le plateau qu'on va jouer ne sert à rien.
+const renderTiles = computed(() =>
+  buildBoardMeshes({
+    width: props.width,
+    height: props.height,
+    tiles: props.tiles,
+    theme: boardTheme.value,
+    bases: territoryBases.value,
+  }),
+);
 
 // Direction actuellement affichée par chaque canard (voir DuckSprite.vue) :
 // comparée à la position précédente à chaque mise à jour, pour ne changer
@@ -152,8 +120,6 @@ const webglAvailable = ref(true);
 onMounted(() => {
   webglAvailable.value = isWebglAvailable();
 });
-
-const TILE_SIZE = 0.94;
 
 const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
 

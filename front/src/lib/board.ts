@@ -54,6 +54,86 @@ export function tileColor(
 }
 
 /**
+ * Dimensions d'une case en 3D, partagées par tout ce qui dessine un plateau.
+ *
+ * Elles vivaient dans BoardPreview.vue, donc le rendu d'une partie était le
+ * seul à les connaître. Depuis que les vignettes de « Mes cartes » dessinent
+ * elles aussi un plateau (voir lib/mapThumbnail.ts), deux copies auraient
+ * suffi à faire mentir la vignette : un aperçu qui ne ressemble pas au
+ * plateau qu'on va jouer ne sert à rien.
+ */
+export const TILE_SIZE = 0.94;
+export const FLOOR_HEIGHT = 0.25;
+/**
+ * Un mur qui dépasserait la hauteur du canard (1.05) cacherait le jeu derrière
+ * lui en vue isométrique : on reste nettement en dessous.
+ */
+export const WALL_HEIGHT = 0.4;
+
+/** Une case prête à être dessinée : position, couleur et volume. */
+export interface BoardMesh {
+  x: number;
+  y: number;
+  color: string;
+  height: number;
+  /** Centre vertical du bloc. Toutes les cases partagent la même base, donc un
+   *  mur pousse vers le haut depuis le sol au lieu de flotter ou d'être enterré. */
+  centerY: number;
+}
+
+/**
+ * Les cases d'un plateau, prêtes à dessiner. Fonction pure : c'est toute la
+ * lecture d'une carte (damier, murs, bases, territoires), et elle doit pouvoir
+ * être testée sans WebGL, sans composant et sans navigateur.
+ *
+ * `tiles` porte les données de l'éditeur ; sans elles, damier par défaut (cas
+ * d'une partie en cours, où le serveur n'envoie que les murs).
+ */
+export function buildBoardMeshes(options: {
+  width: number;
+  height: number;
+  tiles?: { x: number; y: number; kind: TileKind }[];
+  theme?: BoardTheme;
+  /** Bases des joueurs : teintent le sol alentour. Vide -> aucun territoire. */
+  bases?: TerritoryBase[];
+}): BoardMesh[] {
+  const { width, height, tiles, theme = "dark", bases = [] } = options;
+  const overrides = new Map(tiles?.map((t) => [`${t.x},${t.y}`, t.kind]));
+  const isWallAt = (x: number, y: number) => overrides.get(`${x},${y}`) === "wall";
+
+  return buildBoardTiles(width, height).map((tile) => {
+    const kind = overrides.get(`${tile.x},${tile.y}`);
+    const blockHeight = kind === "wall" ? WALL_HEIGHT : FLOOR_HEIGHT;
+    const baseColor = tileColor(kind, tile.shade, theme);
+    // Le territoire ne recolore ni un mur ni une base : seules les cases
+    // neutres en reçoivent la teinte.
+    const isNeutralFloor = kind === undefined || kind === "empty";
+
+    // En partie réelle, le serveur ne transmet qu'un « Spawn » générique sans
+    // couleur (mapEditor.ts#wireTileToKind) : la case exacte à toucher pour
+    // marquer serait invisible sans ça. On la peint dans la couleur pleine du
+    // joueur, comme le fait déjà l'éditeur pour ses tuiles « spawn-N ».
+    const exactBase = isNeutralFloor
+      ? bases.find((b) => b.x === tile.x && b.y === tile.y)
+      : undefined;
+
+    const color = exactBase
+      ? exactBase.color
+      : isNeutralFloor && bases.length > 0
+        ? applyTerritoryTint(baseColor, tile.x, tile.y, bases, isWallAt)
+        : baseColor;
+
+    return {
+      x: tile.x,
+      y: tile.y,
+      color,
+      height: blockHeight,
+      centerY: -FLOOR_HEIGHT + blockHeight / 2,
+    };
+  });
+}
+
+/**
  * Les 4 directions de déplacement (voir directionFacing) nommées comme
  * elles se voient réellement à l'écran une fois passées par la caméra
  * isométrique (voir computeIsometricFrame) — RIGHT/DOWN/LEFT/UP en case de

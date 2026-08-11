@@ -3,13 +3,16 @@ import { PLAYER_COLORS } from "../theme.js";
 import {
   applyTerritoryTint,
   BOARD_PRESETS,
+  buildBoardMeshes,
   buildBoardTiles,
   computeIsometricFrame,
   computeTopDownFrame,
   directionFacing,
+  FLOOR_HEIGHT,
   isWebglAvailable,
   mixHexColors,
   tileColor,
+  WALL_HEIGHT,
 } from "./board.js";
 
 describe("buildBoardTiles", () => {
@@ -29,6 +32,74 @@ describe("buildBoardTiles", () => {
     expect(shadeAt(0, 0)).toBe(shadeAt(1, 1));
     expect(shadeAt(0, 0)).not.toBe(shadeAt(1, 0));
     expect(shadeAt(0, 0)).not.toBe(shadeAt(0, 1));
+  });
+});
+
+describe("buildBoardMeshes", () => {
+  const meshAt = (meshes: ReturnType<typeof buildBoardMeshes>, x: number, y: number) =>
+    meshes.find((m) => m.x === x && m.y === y);
+
+  it("covers the whole board, even where the editor placed nothing", () => {
+    expect(buildBoardMeshes({ width: 4, height: 3 })).toHaveLength(12);
+  });
+
+  it("raises walls above the floor", () => {
+    const meshes = buildBoardMeshes({
+      width: 2,
+      height: 1,
+      tiles: [{ x: 0, y: 0, kind: "wall" }],
+    });
+
+    expect(meshAt(meshes, 0, 0)!.height).toBe(WALL_HEIGHT);
+    expect(meshAt(meshes, 1, 0)!.height).toBe(FLOOR_HEIGHT);
+  });
+
+  it("stands every tile on the same ground", () => {
+    // A wall grows upwards from the floor rather than floating above it or
+    // being half-buried: all tiles share the same bottom, never the same centre.
+    const meshes = buildBoardMeshes({
+      width: 2,
+      height: 1,
+      tiles: [{ x: 0, y: 0, kind: "wall" }],
+    });
+    const bottom = (mesh: { centerY: number; height: number }) => mesh.centerY - mesh.height / 2;
+
+    expect(bottom(meshAt(meshes, 0, 0)!)).toBeCloseTo(bottom(meshAt(meshes, 1, 0)!));
+  });
+
+  it("paints the exact base tile in the player's colour", () => {
+    // In a real match the server only sends a generic "Spawn" with no colour,
+    // so the tile you must reach to score would otherwise be invisible.
+    const meshes = buildBoardMeshes({
+      width: 3,
+      height: 1,
+      bases: [{ x: 1, y: 0, color: "#ff0000" }],
+    });
+
+    expect(meshAt(meshes, 1, 0)!.color).toBe("#ff0000");
+  });
+
+  it("never tints a wall with a nearby territory", () => {
+    const withoutBase = buildBoardMeshes({
+      width: 3,
+      height: 1,
+      tiles: [{ x: 1, y: 0, kind: "wall" }],
+    });
+    const withBase = buildBoardMeshes({
+      width: 3,
+      height: 1,
+      tiles: [{ x: 1, y: 0, kind: "wall" }],
+      bases: [{ x: 0, y: 0, color: "#ff0000" }],
+    });
+
+    expect(meshAt(withBase, 1, 0)!.color).toBe(meshAt(withoutBase, 1, 0)!.color);
+  });
+
+  it("follows the interface theme", () => {
+    const dark = buildBoardMeshes({ width: 1, height: 1, theme: "dark" });
+    const light = buildBoardMeshes({ width: 1, height: 1, theme: "light" });
+
+    expect(dark[0]!.color).not.toBe(light[0]!.color);
   });
 });
 
