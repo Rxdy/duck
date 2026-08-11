@@ -1,26 +1,29 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
-import { loadSavedMaps, persistSavedMaps, removeMap, upsertMap } from "../lib/savedMaps.js";
+import { deleteMyMap, fetchMyMaps, saveMyMap, type SavedMap } from "../lib/mapsApi.js";
 import { exportMapAsFile, parseImportedMap, readMapFile } from "../lib/mapShare.js";
+import { useAuthStore } from "../store/authStore.js";
 import SavedMapsList from "../components/molecules/SavedMapsList.vue";
 
 const router = useRouter();
-const savedMaps = ref(loadSavedMaps());
+const auth = useAuthStore();
+const savedMaps = ref<SavedMap[]>([]);
 const importError = ref<string | null>(null);
 
-onMounted(() => {
-  savedMaps.value = loadSavedMaps();
-});
+async function refresh() {
+  savedMaps.value = auth.session ? await fetchMyMaps(auth.session.token) : [];
+}
+
+onMounted(refresh);
 
 function handleLoad(id: string) {
   router.push({ path: "/creatif", query: { load: id } });
 }
 
-function handleDelete(id: string) {
-  const maps = removeMap(savedMaps.value, id);
-  savedMaps.value = maps;
-  persistSavedMaps(maps);
+async function handleDelete(id: string) {
+  if (!auth.session) return;
+  if (await deleteMyMap(auth.session.token, id)) await refresh();
 }
 
 function handleExport(id: string) {
@@ -29,8 +32,8 @@ function handleExport(id: string) {
 }
 
 // Import d'une carte partagée par un autre joueur (fichier exporté via
-// handleExport) : ajoutée à la liste locale avec un id frais, jamais en
-// écrasant une carte existante.
+// handleExport) : enregistrée comme une NOUVELLE carte du compte (aucun id
+// transmis), jamais en écrasant une carte existante.
 async function handleImport(event: Event) {
   importError.value = null;
   const input = event.target as HTMLInputElement;
@@ -45,9 +48,16 @@ async function handleImport(event: Event) {
       importError.value = "Fichier de carte invalide.";
       return;
     }
-    const { maps } = upsertMap(savedMaps.value, { name: imported.name, map: imported });
-    savedMaps.value = maps;
-    persistSavedMaps(maps);
+    if (!auth.session) {
+      importError.value = "Connecte-toi pour enregistrer une carte importée.";
+      return;
+    }
+    const saved = await saveMyMap(auth.session.token, { name: imported.name, map: imported });
+    if (!saved) {
+      importError.value = "Le serveur a refusé cette carte.";
+      return;
+    }
+    await refresh();
   } catch {
     importError.value = "Impossible de lire ce fichier.";
   }
@@ -58,11 +68,11 @@ async function handleImport(event: Event) {
   <div class="flex h-full flex-col gap-3 px-4 py-6">
     <div class="flex items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <RouterLink to="/creatif" aria-label="Retour" class="text-xl text-white/60">←</RouterLink>
+        <RouterLink to="/creatif" aria-label="Retour" class="text-xl text-ink/60">←</RouterLink>
         <h1 class="text-2xl font-bold">Mes cartes</h1>
       </div>
       <label
-        class="shrink-0 cursor-pointer rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white/70"
+        class="shrink-0 cursor-pointer rounded-lg bg-ink/10 px-3 py-2 text-xs font-semibold text-ink/70"
       >
         Importer
         <input type="file" accept="application/json" class="hidden" @change="handleImport" />
@@ -70,6 +80,12 @@ async function handleImport(event: Event) {
     </div>
 
     <p v-if="importError" class="text-center text-xs text-amber-400">{{ importError }}</p>
+
+    <p v-if="!auth.session" class="rounded-lg bg-surface px-3 py-4 text-center text-sm text-ink/60">
+      Tes cartes sont enregistrées sur ton compte.
+      <RouterLink to="/connexion" class="text-cyan-400">Connecte-toi</RouterLink>
+      pour les retrouver ici.
+    </p>
 
     <SavedMapsList
       :maps="savedMaps"

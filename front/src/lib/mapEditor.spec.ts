@@ -141,16 +141,31 @@ describe("toWireSpawns", () => {
     map = placeTile(map, 1, 1, "spawn-0"); // posé après spawn-1, mais doit rester en 1er
 
     expect(toWireSpawns(map)).toEqual([
-      { x: 1, y: 1 },
-      { x: 4, y: 1 },
+      { x: 1, y: 1, color: 0 },
+      { x: 4, y: 1, color: 1 },
     ]);
   });
 
-  it("skips colors that haven't been placed", () => {
+  it("skips colors that haven't been placed, but keeps each spawn's own color", () => {
     let map = createEmptyMap(6, 6);
     map = placeTile(map, 2, 2, "spawn-2");
 
-    expect(toWireSpawns(map)).toEqual([{ x: 2, y: 2 }]);
+    // Le seul spawn posé est le 3e (ambre) : renvoyer color 0 ferait
+    // apparaître un canard rose sur une case ambre côté serveur.
+    expect(toWireSpawns(map)).toEqual([{ x: 2, y: 2, color: 2 }]);
+  });
+
+  it("garde la couleur de chaque spawn quand la carte en saute une (0/2/3)", () => {
+    let map = createEmptyMap(8, 8);
+    map = placeTile(map, 1, 1, "spawn-0");
+    map = placeTile(map, 5, 1, "spawn-2");
+    map = placeTile(map, 3, 5, "spawn-3");
+
+    expect(toWireSpawns(map)).toEqual([
+      { x: 1, y: 1, color: 0 },
+      { x: 5, y: 1, color: 2 },
+      { x: 3, y: 5, color: 3 },
+    ]);
   });
 });
 

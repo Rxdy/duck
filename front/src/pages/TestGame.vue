@@ -40,13 +40,10 @@ const displayPlayers = computed(() =>
 <template>
   <div v-if="testSession.map" class="relative h-full w-full">
     <div class="absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-2">
-      <span class="rounded-full bg-slate-900/80 px-4 py-1 text-xs text-white/70">
+      <span class="rounded-full bg-surface/80 px-4 py-1 text-xs text-ink/70">
         Mode entraînement — carte test
       </span>
-      <RouterLink
-        to="/creatif"
-        class="rounded-full bg-slate-900/80 px-3 py-1 text-xs text-white/70"
-      >
+      <RouterLink to="/creatif" class="rounded-full bg-surface/80 px-3 py-1 text-xs text-ink/70">
         Quitter
       </RouterLink>
     </div>
