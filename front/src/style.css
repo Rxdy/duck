@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/**
+ * Palettes de thème. Le sombre reste le défaut (le jeu est né comme ça, et
+ * c'est ce que voit quelqu'un avant même que ses réglages soient lus) ; le
+ * clair s'active via data-theme sur <html>, posé par le store de réglages.
+ *
+ * Canaux RVB séparés, sans rgb() : c'est la forme qu'attend Tailwind pour
+ * pouvoir appliquer une opacité par-dessus (bg-ink/10, text-ink/60...).
+ */
+:root {
+  /* Fait suivre le thème aux contrôles NATIFS : piste des curseurs de volume,
+     cases à cocher, barres de défilement, autocomplétion. Sans ça, ils
+     gardent l'apparence par défaut du système et jurent avec le reste. */
+  color-scheme: dark;
+  --ink: 255 255 255;
+  --surface: 15 23 42;
+  --surface-deep: 2 6 23;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ink: 15 23 42;
+  /* Panneaux BLANCS sur un fond légèrement gris : en clair, un panneau posé
+     sur du blanc quasi pur n'existe pas visuellement. C'est l'inverse du
+     sombre, où le panneau est plus clair que le fond. */
+  --surface: 255 255 255;
+  --surface-deep: 241 245 249;
+}
+
+body {
+  background-color: rgb(var(--surface-deep));
+  color: rgb(var(--ink));
+}

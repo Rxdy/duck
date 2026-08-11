@@ -1,18 +1,41 @@
 services:
-  server:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=duck
+      - POSTGRES_PASSWORD=duck
+      - POSTGRES_DB=duck
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U duck -d duck"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  back:
     build:
-      context: .
-      dockerfile: apps/server/Dockerfile
+      context: ./back
     ports:
       - "8080:8080"
     environment:
       - PORT=8080
+      - DATABASE_URL=postgres://duck:duck@db:5432/duck
+    depends_on:
+      db:
+        condition: service_healthy
 
-  client:
+  front:
     build:
-      context: .
-      dockerfile: apps/client/Dockerfile
+      context: ./front
     ports:
       - "5173:80"
     depends_on:
-      - server
+      - back
+
+volumes:
+  db_data:
