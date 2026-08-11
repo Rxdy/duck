@@ -6,14 +6,16 @@ describe("DuckAvatar", () => {
   it("defaults to the round avatar style", () => {
     const wrapper = mount(DuckAvatar);
     const img = wrapper.get("img");
-    expect(img.attributes("src")).toBe("/duck.png");
-    expect(img.classes()).toContain("rounded-full");
+    // Version transparente : dans l'interface, un fond opaque ferait une
+    // vignette sombre collée sur la page (voir scripts/generate-icons.py).
+    expect(img.attributes("src")).toBe("/duck-mark.png");
+    expect(img.classes()).toContain("h-7");
   });
 
-  it("renders a square-ish logo style when variant is logo", () => {
+  it("renders a bigger mark when variant is logo", () => {
     const wrapper = mount(DuckAvatar, { props: { variant: "logo" } });
     const img = wrapper.get("img");
-    expect(img.classes()).toContain("rounded");
-    expect(img.classes()).not.toContain("rounded-full");
+    expect(img.classes()).toContain("h-8");
+    expect(img.classes()).toContain("object-contain");
   });
 });
