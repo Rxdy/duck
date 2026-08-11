@@ -33,31 +33,56 @@ describe("parseWireSpawns", () => {
     expect(
       parseWireSpawns(
         [
-          { x: 0, y: 0 },
-          { x: 2, y: 0 },
+          { x: 0, y: 0, color: 0 },
+          { x: 2, y: 0, color: 1 },
         ],
         map,
       ),
     ).toEqual([
-      { x: 0, y: 0 },
-      { x: 2, y: 0 },
+      { x: 0, y: 0, color: 0 },
+      { x: 2, y: 0, color: 1 },
+    ]);
+  });
+
+  it("keeps each spawn's own color, even when the map skips one", () => {
+    // Carte qui n'utilise que spawn-0 et spawn-2 : sans cet indice, le
+    // deuxième joueur hériterait de la couleur du rang 1 (cyan) alors qu'il
+    // apparaît sur une case ambre.
+    expect(
+      parseWireSpawns(
+        [
+          { x: 0, y: 0, color: 0 },
+          { x: 2, y: 0, color: 2 },
+        ],
+        map,
+      ),
+    ).toEqual([
+      { x: 0, y: 0, color: 0 },
+      { x: 2, y: 0, color: 2 },
+    ]);
+  });
+
+  it("falls back to the spawn's rank when the client sends no usable color", () => {
+    expect(parseWireSpawns([{ x: 0, y: 0, color: -3 }, { x: 2, y: 0 } as never], map)).toEqual([
+      { x: 0, y: 0, color: 0 },
+      { x: 2, y: 0, color: 1 },
     ]);
   });
 
   it("drops a position that isn't a Spawn tile on the actual map", () => {
-    expect(parseWireSpawns([{ x: 1, y: 0 }], map)).toEqual([]);
+    expect(parseWireSpawns([{ x: 1, y: 0, color: 0 }], map)).toEqual([]);
   });
 
   it("drops out-of-bounds or malformed positions instead of trusting the client", () => {
     expect(
       parseWireSpawns(
         [
-          { x: 99, y: 0 },
-          { x: -1, y: 0 },
+          { x: 99, y: 0, color: 0 },
+          { x: -1, y: 0, color: 1 },
         ],
         map,
       ),
     ).toEqual([]);
-    expect(parseWireSpawns([{ x: 0.5, y: 0 }], map)).toEqual([]);
+    expect(parseWireSpawns([{ x: 0.5, y: 0, color: 0 }], map)).toEqual([]);
   });
 });
