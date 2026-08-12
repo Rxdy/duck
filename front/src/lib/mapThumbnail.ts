@@ -14,6 +14,7 @@ import {
   buildBoardMeshes,
   computeIsometricFrame,
   isWebglAvailable,
+  SUN_POSITION,
   TILE_SIZE,
   type BoardTheme,
 } from "./board.js";
@@ -84,23 +85,16 @@ function acquire(): Renderer | undefined {
     // Une seule image par carte, jamais réaffichée : inutile de payer le
     // pixel ratio d'un écran haute densité par-dessus une taille déjà large.
     renderer.setPixelRatio(1);
-    renderer.shadowMap.enabled = true;
 
     const scene = new Scene();
     // Mêmes lumières que BoardPreview, aux mêmes valeurs : une ambiante faible
     // et une directionnelle marquée, sans quoi toutes les faces reçoivent
-    // autant de lumière et le relief disparaît.
+    // autant de lumière et le relief disparaît. C'est ce contraste entre faces
+    // qui donne le volume — il n'y a pas d'ombre portée à attendre en plus, le
+    // soleil est dans l'axe de la caméra (voir board.ts#SUN_POSITION).
     scene.add(new AmbientLight(0xffffff, 0.35));
     const sun = new DirectionalLight(0xffffff, 1.3);
-    sun.position.set(10, 20, 10);
-    // L'ombre portée fait la moitié du volume. L'oublier ici donnait une
-    // vignette plus plate que le plateau qu'elle est censée annoncer — et
-    // c'est précisément ce qu'on cherche à éviter en partageant board.ts.
-    //
-    // Le tronc d'ombre reste celui par défaut, comme dans BoardPreview : les
-    // deux rendus se ressemblent, y compris dans leurs limites. S'il faut un
-    // jour cadrer cette ombre sur le plateau, c'est aux DEUX endroits.
-    sun.castShadow = true;
+    sun.position.set(...SUN_POSITION);
     scene.add(sun);
 
     shared = {
@@ -145,8 +139,6 @@ export function renderMapThumbnail(map: EditorMap, theme: BoardTheme = "dark"): 
     // ce qui évite une BoxGeometry par case.
     mesh.scale.set(1, tile.height, 1);
     mesh.position.set(tile.x + 0.5, tile.centerY, tile.y + 0.5);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
     scene.add(mesh);
     drawn.push(mesh);
   }
