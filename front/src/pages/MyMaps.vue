@@ -1,15 +1,28 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import { toPlacedTiles } from "../lib/mapEditor.js";
 import { deleteMyMap, fetchMyMaps, saveMyMap, type SavedMap } from "../lib/mapsApi.js";
 import { exportMapAsFile, parseImportedMap, readMapFile } from "../lib/mapShare.js";
+import { releaseThumbnailRenderer } from "../lib/mapThumbnail.js";
 import { useAuthStore } from "../store/authStore.js";
-import SavedMapsList from "../components/molecules/SavedMapsList.vue";
+import BoardViewDialog from "../components/molecules/BoardViewDialog.vue";
+import MapActionSheet from "../components/molecules/MapActionSheet.vue";
+import MapCard from "../components/molecules/MapCard.vue";
 
 const router = useRouter();
 const auth = useAuthStore();
 const savedMaps = ref<SavedMap[]>([]);
 const importError = ref<string | null>(null);
+
+/** Carte dont on a ouvert les actions, et carte dont on regarde l'aperçu. */
+const selectedId = ref<string | null>(null);
+const previewedId = ref<string | null>(null);
+const selected = computed(() => savedMaps.value.find((m) => m.id === selectedId.value));
+const previewed = computed(() => savedMaps.value.find((m) => m.id === previewedId.value));
+const previewedTiles = computed(() =>
+  previewed.value ? toPlacedTiles(previewed.value) : undefined,
+);
 
 async function refresh() {
   savedMaps.value = auth.session ? await fetchMyMaps(auth.session.token) : [];
@@ -17,18 +30,30 @@ async function refresh() {
 
 onMounted(refresh);
 
-function handleLoad(id: string) {
-  router.push({ path: "/creatif", query: { load: id } });
+// Le contexte WebGL des vignettes ne sert plus une fois la page quittée, et il
+// compte dans le quota du navigateur — que les aperçus vivants des autres
+// écrans (partie, éditeur) vont réclamer juste après.
+onUnmounted(releaseThumbnailRenderer);
+
+function handleEdit() {
+  if (selectedId.value) router.push({ path: "/creatif", query: { load: selectedId.value } });
 }
 
-async function handleDelete(id: string) {
-  if (!auth.session) return;
+function handlePreview() {
+  previewedId.value = selectedId.value;
+  selectedId.value = null;
+}
+
+async function handleDelete() {
+  const id = selectedId.value;
+  selectedId.value = null;
+  if (!auth.session || !id) return;
   if (await deleteMyMap(auth.session.token, id)) await refresh();
 }
 
-function handleExport(id: string) {
-  const map = savedMaps.value.find((m) => m.id === id);
-  if (map) exportMapAsFile(map);
+function handleExport() {
+  if (selected.value) exportMapAsFile(selected.value);
+  selectedId.value = null;
 }
 
 // Import d'une carte partagée par un autre joueur (fichier exporté via
@@ -87,11 +112,33 @@ async function handleImport(event: Event) {
       pour les retrouver ici.
     </p>
 
-    <SavedMapsList
-      :maps="savedMaps"
-      @load="handleLoad"
-      @delete="handleDelete"
+    <!-- Deux colonnes : à une seule, la vignette est plus grande mais on ne
+         voit qu'une carte et demie par écran, et « Mes cartes » devient un
+         défilement. À trois, le plateau n'est plus qu'une silhouette. -->
+    <div v-if="savedMaps.length > 0" class="grid grid-cols-2 gap-3 overflow-y-auto pb-2">
+      <MapCard v-for="map in savedMaps" :key="map.id" :map="map" @open="selectedId = map.id" />
+    </div>
+
+    <p v-else-if="auth.session" class="text-center text-xs text-ink/40">
+      Aucune carte enregistrée pour l'instant.
+    </p>
+
+    <MapActionSheet
+      v-if="selected"
+      :map="selected"
+      @close="selectedId = null"
+      @edit="handleEdit"
+      @preview="handlePreview"
       @export="handleExport"
+      @delete="handleDelete"
+    />
+
+    <BoardViewDialog
+      v-if="previewed && previewedTiles"
+      :width="previewed.width"
+      :height="previewed.height"
+      :tiles="previewedTiles"
+      @close="previewedId = null"
     />
   </div>
 </template>
