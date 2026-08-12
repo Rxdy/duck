@@ -144,6 +144,17 @@ logs: ## Suit les logs de toute la pile
 ps: ## État des conteneurs
 	$(COMPOSE) ps
 
+##@ Rendu (vérification visuelle)
+
+screenshot: ## Capture une page de l'app en 3D logicielle — URL=... OUT=shot.png
+	@if [ -z "$(URL)" ]; then \
+		echo "Usage : make screenshot URL=http://localhost:$(FRONT_PORT)/creatif [OUT=shot.png]"; \
+		echo "        options : TOKEN=<jeton de session> WAIT=<sélecteur CSS>"; \
+		echo "L'application doit tourner (make dev)."; exit 2; \
+	fi
+	node scripts/screenshot.mjs "$(URL)" "$(or $(OUT),shot.png)" \
+		$(if $(TOKEN),--token=$(TOKEN)) $(if $(WAIT),--wait=$(WAIT))
+
 ##@ Art (scripts d'atelier, résultats commités)
 
 sprites: ## Régénère les sprites du canard par couleur (Pillow requis)
