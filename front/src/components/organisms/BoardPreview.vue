@@ -10,6 +10,7 @@ import {
   computeTopDownFrame,
   directionFacing,
   isWebglAvailable,
+  SUN_POSITION,
   TILE_SIZE,
   type Facing,
   type TerritoryBase,
@@ -209,24 +210,22 @@ function handleClick(event: MouseEvent) {
 
 <template>
   <div ref="containerRef" class="h-full w-full" @click="handleClick">
-    <TresCanvas
-      v-if="webglAvailable"
-      :camera="camera"
-      :clear-color="boardBackground(boardTheme)"
-      shadows
-    >
+    <TresCanvas v-if="webglAvailable" :camera="camera" :clear-color="boardBackground(boardTheme)">
       <!-- Une ambiante trop forte aplatit tout (chaque face reçoit la même
            lumière peu importe son orientation) : baissée au profit d'une
-           directionnelle plus marquée + son ombre portée, qui sont ce qui
-           donne réellement une impression de volume. -->
+           directionnelle plus marquée. C'est le contraste entre les faces d'un
+           bloc qui donne le volume, pas une ombre portée : le soleil est dans
+           l'axe de la caméra, donc toute ombre tomberait derrière son objet et
+           resterait invisible (voir lib/board.ts#SUN_POSITION). La passe
+           d'ombre a donc été retirée — elle tournait à chaque image sans que
+           rien ne puisse la projeter. -->
       <TresAmbientLight :intensity="0.35" />
-      <TresDirectionalLight :position="[10, 20, 10]" :intensity="1.3" cast-shadow />
+      <TresDirectionalLight :position="SUN_POSITION" :intensity="1.3" />
 
       <TresMesh
         v-for="tile in renderTiles"
         :key="`${tile.x}-${tile.y}`"
         :position="[tile.x + 0.5, tile.centerY, tile.y + 0.5]"
-        receive-shadow
       >
         <TresBoxGeometry :args="[TILE_SIZE, tile.height, TILE_SIZE]" />
         <TresMeshStandardMaterial :color="tile.color" />
