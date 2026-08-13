@@ -21,10 +21,17 @@ export PORT VITE_SERVER_WS_URL
 
 COMPOSE := docker compose
 
+# `make elo USER=… VALUE=…` (voir plus bas). USER est DÉJÀ dans l'environnement
+# de tout shell Unix — c'est le nom de session. Sans ce filtre, `make elo
+# VALUE=1200` sans USER= ne serait pas refusé : make lirait l'environnement et
+# la commande irait fixer le classement du compte portant le nom de
+# l'utilisateur courant. On ne retient donc USER que passé en ligne de commande.
+ELO_USER := $(if $(filter command line,$(origin USER)),$(USER),)
+
 .PHONY: help install env dev dev-back dev-front lint lint-front lint-back \
         format format-fix typecheck typecheck-front typecheck-back \
         test test-front test-back build check \
-        db-up db-down db-wait db-schema db-psql db-logs db-reset \
+        db-up db-down db-wait db-schema db-psql db-logs db-reset elo \
         up down build-images logs ps \
         sprites icons clean clean-db
 
@@ -121,6 +128,25 @@ db-psql: db-up db-wait ## Ouvre un shell psql sur la base locale
 
 db-logs: ## Suit les logs de Postgres
 	$(COMPOSE) logs -f db
+
+elo: db-up db-wait ## Fixe le classement d'un compte — USER=pseudo VALUE=1200
+	@if [ -z "$(ELO_USER)" ] || [ -z "$(VALUE)" ]; then \
+		echo "Usage : make elo USER=<pseudo> VALUE=<entier>" >&2; \
+		echo "Exemple : make elo USER=Deeps VALUE=1200" >&2; \
+		exit 1; \
+	fi; \
+	case "$(VALUE)" in \
+		''|*[!0-9]*) echo "VALUE doit être un entier positif (reçu : « $(VALUE) »)." >&2; exit 1;; \
+	esac; \
+	updated=$$(printf '%s\n' \
+		"UPDATE accounts SET rating = :value WHERE username = :'username'" \
+		"RETURNING username || ' : ' || rating;" \
+		| $(COMPOSE) exec -T db psql -U duck -d duck -tAq -v ON_ERROR_STOP=1 \
+			-v username="$(ELO_USER)" -v value="$(VALUE)") || exit 1; \
+	if [ -z "$$updated" ]; then \
+		echo "Aucun compte nommé « $(ELO_USER) »." >&2; exit 1; \
+	fi; \
+	echo "$$updated"
 
 db-reset: ## Détruit le volume Postgres et recrée une base vierge
 	$(COMPOSE) rm -sfv db
