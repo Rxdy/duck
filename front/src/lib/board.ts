@@ -337,6 +337,34 @@ export function computeIsometricFrame(width: number, height: number, fit = 0.62)
 }
 
 /**
+ * Position du soleil, partagée par tout ce qui dessine un plateau. Une lumière
+ * directionnelle n'a pas de position au sens propre : seule compte sa direction
+ * vers l'origine, soit ici « en haut, à droite, devant ».
+ *
+ * Cet axe est aussi celui de la caméra isométrique (voir computeIsometricFrame,
+ * même azimut en x et z, élévation plus basse). C'est un choix : les faces
+ * tournées vers le joueur sont les mieux éclairées, et le relief se lit sans
+ * qu'aucune case ne parte dans le noir.
+ *
+ * La conséquence est qu'il n'y a AUCUNE ombre portée à attendre de cet
+ * éclairage, et qu'il ne sert à rien d'en activer une. Une ombre part à
+ * l'opposé de la lumière, donc ici droit derrière son objet vu de la caméra ;
+ * et comme le soleil est PLUS HAUT que la caméra (55° contre 35°), elle est
+ * toujours plus courte que l'objet ne paraît haut. Elle est donc intégralement
+ * masquée par ce qui la projette, quelle que soit la hauteur des murs.
+ *
+ * Mesuré, pas supposé : avec l'ombre activée et son tronc correctement cadré
+ * sur le plateau, 0,1 % des pixels changent, d'un écart moyen de 4/255 — du
+ * bruit d'anticrénelage sur les arêtes, aucune forme d'ombre. La retirer
+ * laisse le plateau de l'éditeur pixel pour pixel identique. Ces captures se
+ * refont avec `scripts/screenshot.mjs`.
+ *
+ * Pour qu'une ombre se voie un jour, c'est le soleil qu'il faut sortir de
+ * l'axe de la caméra — un choix d'éclairage, pas un réglage d'ombre.
+ */
+export const SUN_POSITION: [number, number, number] = [10, 20, 10];
+
+/**
  * Cadrage vue de dessus (caméra directement au-dessus du plateau, qui regarde
  * vers le bas). Utilisé pour l'éditeur de carte : plus précis pour placer les
  * éléments (murs, spawn, base...) qu'une vue en angle où les cases se
