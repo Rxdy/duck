@@ -23,9 +23,14 @@ export function useGameSocket(
   const settings = useSettingsStore();
   const auth = useAuthStore();
   let socket: WebSocket | null = null;
+  // La partie ne commence plus à la connexion : depuis les salles partagées
+  // (voir back/src/matchmaking.ts), on patiente d'abord dans une salle qui
+  // réunit ses joueurs. Le premier STATE marque le vrai départ.
+  let started = false;
 
   function connect() {
     socket = new WebSocket(SERVER_URL);
+    started = false;
 
     socket.addEventListener("open", () => {
       send(socket!, {
@@ -39,7 +44,9 @@ export function useGameSocket(
         mode,
         botLevel,
       });
-      playArcadeStartJingle(settings.musicVolume);
+      // Le jingle de départ attend le premier STATE, pas la connexion : il
+      // annonce le début de la partie, qui peut venir dix secondes plus tard.
+      // L'ambiance, elle, accompagne aussi l'attente.
       startAmbientLoop(settings.musicVolume);
     });
 
@@ -57,7 +64,19 @@ export function useGameSocket(
         store.setWinner(message.winnerId);
         return;
       }
+      if (message.type === "WAITING") {
+        store.setWaiting({ capacity: message.capacity, startsInMs: message.startsInMs });
+        store.setPlayers(message.players);
+        return;
+      }
       if (message.type === "STATE") {
+        // Premier STATE : la salle a fini de réunir ses joueurs, la partie
+        // part vraiment. C'est ici qu'on quitte l'écran d'attente.
+        if (!started) {
+          started = true;
+          store.setWaiting(null);
+          playArcadeStartJingle(settings.musicVolume);
+        }
         // Comparé AVANT setPlayers (qui écrase store.players) pour détecter
         // un score qui vient d'augmenter et jouer le bip correspondant.
         const previousScores = new Map(store.players.map((p) => [p.id, p.score]));
@@ -80,10 +99,11 @@ export function useGameSocket(
   }
 
   /**
-   * Relance une partie dans le même mode : le serveur crée une salle neuve à
-   * chaque JOIN (voir back/src/index.ts), donc il faut vraiment refermer la
-   * connexion — la rouvrir est le seul moyen d'obtenir une nouvelle salle,
-   * avec sa carte tirée au sort et ses bots.
+   * Relance une partie dans le même mode. Il faut vraiment refermer la
+   * connexion : c'est le JOIN qui demande une place, et la salle qu'on vient
+   * de quitter est partie (voir back/src/matchmaking.ts) — la rouvrir est le
+   * seul moyen d'être placé dans la suivante, qui aura sa propre carte et ses
+   * propres adversaires, humains si d'autres attendent au même moment.
    */
   function restart() {
     socket?.close();

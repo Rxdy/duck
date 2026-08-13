@@ -42,10 +42,25 @@ export class GameRoom {
   private winScore?: number;
   private matchContext?: MatchContext;
   private ended = false;
-  // Instant d'entrée du PREMIER joueur, pas de création de la salle : c'est de
-  // là que la partie est réellement jouée. Une salle créée puis rejointe une
-  // seconde plus tard ne doit pas facturer cette seconde au joueur.
+  // Instant du DÉPART de la partie (voir start()), pas de l'entrée du premier
+  // joueur : depuis les salles partagées (voir matchmaking.ts), un joueur peut
+  // patienter jusqu'à dix secondes avant que la partie parte. Facturer cette
+  // attente à la durée de la partie enregistrée fausserait toutes les
+  // statistiques d'un joueur qui a le malheur d'arriver le premier.
   private startedAt?: number;
+  // Nombre de places assises, donc de joueurs à réunir avant le départ. Vaut
+  // le nombre de bases de la carte : c'est la carte qui décide combien on peut
+  // être, pas l'inverse (voir index.ts#pickRandomOfficialMap).
+  private readonly capacity: number;
+  // L'attente est une affaire de MATCHMAKING, pas de salle : une salle joue
+  // dès qu'on la crée, et seul openForWaiting() la met en attente de joueurs.
+  // C'est ce qui laisse l'entraînement (JOIN_TEST) — qui n'attend personne —
+  // ignorer complètement ce mécanisme.
+  private waiting = false;
+  // Échéance de départ au plus tard, transmise au client pour qu'il affiche
+  // l'attente (voir protocol.ts#WaitingMessage). Absente en entraînement, qui
+  // part immédiatement.
+  private waitingUntil?: number;
   // Identifiant anonyme par joueur (voir front/src/lib/anonId.ts), séparé du
   // Player du moteur de jeu : il ne doit jamais être diffusé aux autres
   // joueurs via broadcastState, seulement utilisé pour enregistrer la partie.
@@ -64,6 +79,10 @@ export class GameRoom {
    *
    * `matchContext`, si fourni, enregistre la partie (back/src/db.ts) une
    * fois qu'elle se termine.
+   *
+   * `capacity`, si fourni, fixe le nombre de places de la salle — c'est lui
+   * qui dit quand elle est pleine, donc quand la partie peut partir sans
+   * attendre (voir matchmaking.ts). Par défaut, le nombre de spawns connus.
    */
   constructor(
     id: string,
@@ -71,11 +90,42 @@ export class GameRoom {
     spawnOrder: WireSpawn[] = [],
     winScore?: number,
     matchContext?: MatchContext,
+    capacity?: number,
   ) {
     this.state = { id, map, players: [] };
     this.spawnOrder = spawnOrder;
     this.winScore = winScore;
     this.matchContext = matchContext;
+    this.capacity = capacity ?? (spawnOrder.length || Number.POSITIVE_INFINITY);
+  }
+
+  get id(): string {
+    return this.state.id;
+  }
+
+  get isStarted(): boolean {
+    return !this.waiting;
+  }
+
+  /** Plus une seule place : la partie n'a plus de raison d'attendre. */
+  get isFull(): boolean {
+    return this.state.players.length >= this.capacity;
+  }
+
+  /** Places encore vides, à compléter par des bots au départ (voir index.ts). */
+  get freeSeats(): number {
+    return Number.isFinite(this.capacity)
+      ? Math.max(0, this.capacity - this.state.players.length)
+      : 0;
+  }
+
+  /**
+   * Compte les joueurs réellement connectés — un bot n'a pas de socket. Sert à
+   * décider si une salle a encore une raison d'exister : une salle où il ne
+   * reste que des bots ne regarde plus personne.
+   */
+  get humanCount(): number {
+    return this.sockets.size;
   }
 
   join(
@@ -89,6 +139,35 @@ export class GameRoom {
     this.sockets.set(playerId, socket);
     this.addPlayer(playerId, name, accessory);
     if (anonId) this.anonIds.set(playerId, anonId);
+    this.broadcastState();
+  }
+
+  /**
+   * Met la salle en attente de joueurs jusqu'à `deadlineAt` (voir
+   * matchmaking.ts) : elle cesse d'accepter les coups et annonce l'attente à
+   * chacun de ses occupants. À appeler AVANT le premier entrant, pour qu'il
+   * reçoive une échéance plutôt qu'un compte à rebours sans chiffre.
+   */
+  openForWaiting(deadlineAt: number): void {
+    this.waiting = true;
+    this.waitingUntil = deadlineAt;
+    this.broadcastState();
+  }
+
+  /**
+   * Donne le départ : les coups sont acceptés, et le chrono de la partie
+   * enregistrée repart de zéro — les secondes passées à attendre des
+   * adversaires ne sont pas de la partie jouée.
+   *
+   * Sans effet sur une salle qui n'attendait pas : une salle remplie AVANT la
+   * fin du délai part immédiatement, et le délai qui expire ensuite ne doit
+   * pas remettre son chrono à zéro en pleine partie.
+   */
+  start(): void {
+    if (!this.waiting) return;
+    this.waiting = false;
+    this.waitingUntil = undefined;
+    this.startedAt = Date.now();
     this.broadcastState();
   }
 
@@ -150,6 +229,7 @@ export class GameRoom {
   }
 
   handle(playerId: string, message: ClientMessage): void {
+    if (this.waiting) return; // partie pas encore partie : on attend encore des joueurs
     if (this.ended) return; // partie déjà terminée : plus aucun coup n'est accepté
 
     if (message.type === "MOVE") {
@@ -251,13 +331,28 @@ export class GameRoom {
     return spawns;
   }
 
+  /**
+   * Tant que la partie n'est pas partie, la salle diffuse WAITING plutôt que
+   * STATE : le client doit pouvoir DIRE qu'on attend des adversaires, au lieu
+   * d'afficher un plateau jouable sur lequel les touches ne répondent pas
+   * (voir handle()). Une fois partie, plus jamais de WAITING.
+   */
   private broadcastState(): void {
     const now = Date.now();
     const players: PlayerState[] = this.state.players.map((p) => ({
       ...p,
       immuneForMs: Math.max(0, p.immuneUntil - now),
     }));
-    const message: ServerMessage = { type: "STATE", players };
+    const message: ServerMessage = this.waiting
+      ? {
+          type: "WAITING",
+          players,
+          capacity: Number.isFinite(this.capacity) ? this.capacity : players.length,
+          // Une DURÉE, pas une date : l'horloge du navigateur n'est pas celle
+          // du serveur, même raison que PlayerState#immuneForMs.
+          startsInMs: Math.max(0, (this.waitingUntil ?? now) - now),
+        }
+      : { type: "STATE", players };
     const payload = JSON.stringify(message);
     for (const socket of this.sockets.values()) {
       socket.send(payload);

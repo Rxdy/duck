@@ -17,10 +17,18 @@ export const useGameStore = defineStore("game", {
     // Défini quand le serveur refuse la demande (message ERROR) : la partie
     // n'a jamais commencé.
     error: null as string | null,
+    // Non nul tant que la salle réunit ses joueurs (message WAITING, voir
+    // back/src/matchmaking.ts) : le serveur refuse les coups pendant ce
+    // temps-là, l'interface doit le dire plutôt que de laisser croire à des
+    // commandes cassées. Repasse à null au premier STATE, définitivement.
+    waiting: null as { capacity: number; startsInMs: number } | null,
   }),
   actions: {
     setPlayers(players: PlayerState[]) {
       this.players = players;
+    },
+    setWaiting(waiting: { capacity: number; startsInMs: number } | null) {
+      this.waiting = waiting;
     },
     setMap(map: GameMapInfo) {
       this.map = map;
@@ -42,6 +50,7 @@ export const useGameStore = defineStore("game", {
       this.map = null;
       this.winnerId = null;
       this.error = null;
+      this.waiting = null;
     },
   },
 });
