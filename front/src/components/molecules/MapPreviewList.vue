@@ -52,7 +52,6 @@ const previews = computed(() =>
         :width="previews[current]!.width"
         :height="previews[current]!.height"
         :tiles="previews[current]!.placed"
-        :fit="0.44"
       />
 
       <button

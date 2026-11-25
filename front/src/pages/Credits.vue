@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { DUCK_GLOW, DUCK_IMAGES } from "../lib/ducks.js";
 /**
  * Page Crédits : qui a fait le jeu, avec quoi, et ce qu'on doit à d'autres.
  * La section "Ressources" n'est pas de la politesse — Remix Icon est sous
@@ -15,54 +16,63 @@ const TECHNOLOGIES = [
 </script>
 
 <template>
-  <div class="mx-auto flex h-full max-w-md flex-col gap-6 overflow-y-auto px-4 py-6">
-    <div class="flex flex-col items-center gap-3 text-center">
-      <img src="/duck-mark.png" alt="" class="h-20 w-20 object-contain" />
-      <h1 class="text-2xl font-bold">Duck</h1>
-      <p class="text-sm text-ink/60">
+  <div
+    class="mx-auto flex h-full max-w-md flex-col gap-3 overflow-y-auto px-4 py-4 tiny:gap-2 tiny:py-2 short:max-w-4xl short:gap-2 short:py-2 lg:max-w-3xl lg:justify-center"
+  >
+    <div class="flex flex-col items-center gap-1 text-center">
+      <div class="flex justify-center">
+        <img
+          v-for="duck in Object.values(DUCK_IMAGES)"
+          :key="duck"
+          :src="duck"
+          alt=""
+          class="duck-glow h-16 w-16 object-contain tiny:h-9 tiny:w-9 short:hidden lg:h-24 lg:w-24"
+          :style="{ '--duck-glow': DUCK_GLOW[duck] }"
+        />
+      </div>
+      <h1 class="text-3xl font-extrabold tiny:text-2xl short:text-xl">Duck</h1>
+      <p class="text-sm text-ink/80 tiny:text-xs short:text-xs">
         Un jeu multijoueur sur grille : rejoindre la base adverse pour marquer, sans se faire
         toucher en chemin.
       </p>
     </div>
 
-    <section class="flex flex-col gap-1">
-      <h2 class="text-xs uppercase tracking-wider text-ink/40">Conception et développement</h2>
-      <p class="text-sm text-ink/80">Rudy</p>
-    </section>
+    <div class="grid grid-cols-1 gap-3 tiny:gap-2 short:grid-cols-2 short:gap-2 lg:grid-cols-2">
+      <section class="panel rounded-2xl p-3 tiny:p-2 short:p-2">
+        <h2 class="text-xs font-bold uppercase tracking-wider">Conception et développement</h2>
+        <p class="text-sm">Rudy</p>
+      </section>
 
-    <section class="flex flex-col gap-1">
-      <h2 class="text-xs uppercase tracking-wider text-ink/40">Inspiration</h2>
-      <p class="text-sm text-ink/80">
-        Les mini-jeux construits avec les Wired de Habbo Hotel : des règles très simples sur une
-        grille, et tout le sel dans la carte.
-      </p>
-    </section>
+      <section class="panel rounded-2xl p-3 tiny:p-2 short:p-2">
+        <h2 class="text-xs font-bold uppercase tracking-wider">Inspiration</h2>
+        <p class="text-sm text-ink/90 tiny:text-xs short:text-xs">
+          Les mini-jeux construits avec les Wired de Habbo Hotel : des règles très simples, et tout
+          le sel dans la carte.
+        </p>
+      </section>
 
-    <section class="flex flex-col gap-2">
-      <h2 class="text-xs uppercase tracking-wider text-ink/40">Fabriqué avec</h2>
-      <ul class="flex flex-col gap-1">
-        <li
-          v-for="tech in TECHNOLOGIES"
-          :key="tech.name"
-          class="flex justify-between gap-4 text-sm"
+      <section class="panel rounded-2xl p-3 tiny:p-2 short:p-2 short:col-span-1 lg:col-span-2">
+        <h2 class="mb-2 text-xs font-bold uppercase tracking-wider">Fabriqué avec</h2>
+        <ul
+          class="grid grid-cols-2 gap-x-3 gap-y-1.5 tiny:grid-cols-3 tiny:gap-y-1 short:gap-y-0.5 lg:grid-cols-3"
         >
-          <span class="text-ink/80">{{ tech.name }}</span>
-          <span class="shrink-0 text-ink/40">{{ tech.role }}</span>
-        </li>
-      </ul>
-    </section>
+          <li v-for="tech in TECHNOLOGIES" :key="tech.name" class="min-w-0 leading-tight">
+            <span class="block text-sm font-semibold tiny:text-xs short:text-xs">{{
+              tech.name
+            }}</span>
+            <span class="block text-xs text-ink/60 tiny:hidden short:hidden">{{ tech.role }}</span>
+          </li>
+        </ul>
+      </section>
 
-    <section class="flex flex-col gap-1">
-      <h2 class="text-xs uppercase tracking-wider text-ink/40">Ressources</h2>
-      <p class="text-sm text-ink/80">
-        Icônes d'interface : <span class="text-ink/60">Remix Icon</span>, sous licence Apache 2.0.
-      </p>
-      <p class="text-sm text-ink/80">
-        Le canard existe en huit orientations, déclinées automatiquement dans la couleur de chaque
-        joueur.
-      </p>
-    </section>
+      <section class="panel rounded-2xl p-3 tiny:p-2 short:p-2 short:col-span-1 lg:col-span-2">
+        <h2 class="text-xs font-bold uppercase tracking-wider">Ressources</h2>
+        <p class="text-sm text-ink/90 tiny:text-xs short:text-xs">
+          Icônes d'interface : Remix Icon, sous licence Apache 2.0.
+        </p>
+      </section>
+    </div>
 
-    <p class="pb-2 text-center text-xs text-ink/30">Merci d'y avoir joué.</p>
+    <p class="text-center text-xs text-ink/60 tiny:hidden short:hidden">Merci d'y avoir joué.</p>
   </div>
 </template>

@@ -3,6 +3,8 @@ import {
   countSpawns,
   createEmptyMap,
   placeTile,
+  paintWall,
+  cellsBetween,
   playableLabel,
   spawnColor,
   toPlacedTiles,
@@ -177,7 +179,32 @@ describe("playableLabel", () => {
 
   it("maps spawn counts to the right mode", () => {
     expect(playableLabel(2)).toMatch(/duel/i);
-    expect(playableLabel(3)).toMatch(/ffa 3/i);
+    expect(playableLabel(3)).toMatch(/4e base/i);
     expect(playableLabel(4)).toMatch(/2v2|ffa 4/i);
+  });
+});
+
+describe("tracé de murs", () => {
+  it("pose et gomme sans basculer", () => {
+    let map = paintWall(createEmptyMap(5, 5), 2, 2, "wall");
+    map = paintWall(map, 2, 2, "wall");
+    expect(map.tiles[2]![2]).toBe("wall");
+    expect(paintWall(map, 2, 2, "empty").tiles[2]![2]).toBe("empty");
+  });
+
+  it("épargne les bases et le contour", () => {
+    const map = placeTile(createEmptyMap(5, 5), 2, 2, "spawn-0");
+    expect(paintWall(map, 2, 2, "wall")).toBe(map);
+    expect(paintWall(map, 0, 0, "empty")).toBe(map);
+  });
+
+  it("remplit les cases sautées, reliées par un côté", () => {
+    const cells = cellsBetween({ x: 1, y: 1 }, { x: 4, y: 3 });
+    expect(cells.at(-1)).toEqual({ x: 4, y: 3 });
+    let previous = { x: 1, y: 1 };
+    for (const cell of cells) {
+      expect(Math.abs(cell.x - previous.x) + Math.abs(cell.y - previous.y)).toBe(1);
+      previous = cell;
+    }
   });
 });

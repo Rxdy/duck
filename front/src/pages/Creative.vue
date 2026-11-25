@@ -6,6 +6,8 @@ import {
   countSpawns,
   isBorder,
   placeTile,
+  paintWall,
+  cellsBetween,
   playableLabel,
   toPlacedTiles,
 } from "../lib/mapEditor.js";
@@ -14,7 +16,6 @@ import { fetchMyMaps, saveMyMap } from "../lib/mapsApi.js";
 import { useAuthStore } from "../store/authStore.js";
 import { useCreativeEditorStore } from "../store/creativeEditorStore.js";
 import { useTestSessionStore } from "../store/testSessionStore.js";
-import AppButton from "../components/atoms/AppButton.vue";
 import IconButton from "../components/atoms/IconButton.vue";
 import BoardSizeDropdown from "../components/molecules/BoardSizeDropdown.vue";
 import BoardViewDialog from "../components/molecules/BoardViewDialog.vue";
@@ -52,8 +53,23 @@ function handleResize(width: number, height: number) {
   editor.resetForSize(width, height, CUSTOM_SIZE_ID);
 }
 
-function handleTileClick(x: number, y: number) {
+// Tracé en cours : seuls les murs se dessinent. Ce que fait la première case
+// (poser ou gommer) vaut pour tout le trait.
+let stroke: { kind: "wall" | "empty"; x: number; y: number } | undefined;
+
+function handleTileDown(x: number, y: number) {
   editor.map = placeTile(editor.map, x, y, editor.tool);
+  const kind = editor.map.tiles[y]?.[x];
+  stroke =
+    editor.tool === "wall" && (kind === "wall" || kind === "empty") ? { kind, x, y } : undefined;
+}
+
+function handleTileDrag(x: number, y: number) {
+  if (!stroke) return;
+  for (const cell of cellsBetween(stroke, { x, y })) {
+    editor.map = paintWall(editor.map, cell.x, cell.y, stroke.kind);
+  }
+  stroke = { kind: stroke.kind, x, y };
 }
 
 const notice = ref<string | null>(null);
@@ -90,7 +106,7 @@ const hasWork = computed(() =>
 
 // Un bouton qui ne peut rien faire ne doit pas inviter à être cliqué : il
 // est désactivé, plutôt que de répondre par un message d'erreur.
-const isPlayable = computed(() => spawnCount.value >= 2);
+const isPlayable = computed(() => spawnCount.value === 2 || spawnCount.value === 4);
 const hasName = computed(() => editor.mapName.trim().length > 0);
 
 // Aperçu isométrique (voir molecules/BoardViewDialog.vue) : l'éditeur travaille
@@ -158,12 +174,13 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col gap-3 overflow-y-auto px-4 py-6">
-    <div class="flex items-start justify-between gap-2">
-      <div>
-        <h1 class="text-2xl font-bold">Créatif</h1>
-        <p class="text-sm text-ink/60">Place les spawns (2 à 4) et les murs, puis sauvegarde.</p>
-      </div>
+  <!-- Paysage peu haut : le plateau prend la colonne de gauche sur toute la
+       hauteur, les réglages passent à droite. -->
+  <div
+    class="flex h-full flex-col gap-2 overflow-y-auto px-3 py-3 short:grid short:grid-cols-[minmax(0,1fr)_18rem] short:grid-rows-[repeat(5,auto)_1fr] short:content-start short:gap-2 short:py-2"
+  >
+    <div class="flex items-center justify-between gap-2">
+      <h1 class="text-xl font-bold">Créatif</h1>
       <RouterLink
         to="/creatif/cartes"
         class="shrink-0 rounded-lg bg-ink/10 px-3 py-2 text-xs font-semibold text-ink/70"
@@ -188,20 +205,51 @@ onMounted(() => {
       </p>
     </div>
 
-    <div class="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-ink/10 bg-surface">
-      <BoardPreview
-        :width="editor.map.width"
-        :height="editor.map.height"
-        :tiles="placedTiles"
-        mode="topDown"
-        editable
-        @tile-click="handleTileClick"
-      />
+    <input
+      v-model="editor.mapName"
+      type="text"
+      placeholder="Nom de la carte"
+      aria-label="Nom de la carte"
+      class="rounded-lg border border-ink/10 bg-ink/10 px-3 py-2 text-sm text-ink placeholder:text-ink/40"
+    />
+    <p v-if="notice" role="status" class="text-center text-xs text-amber-400">{{ notice }}</p>
 
-      <!-- Outils de la carte posés SUR le plateau : ils agissent sur ce qu'on
-           regarde, et le bas de l'écran ne garde que ce qui conclut le travail
-           (nommer, tester, sauvegarder). -->
-      <div class="absolute right-2 top-2 flex flex-col gap-2">
+    <div
+      class="flex min-h-[18rem] flex-1 flex-col overflow-hidden rounded-xl border border-ink/10 bg-surface short:col-start-1 short:row-span-6 short:row-start-1 short:min-h-0"
+    >
+      <div class="relative min-h-0 flex-1">
+        <!-- Positionné en absolu : la taille du canvas ne doit pas dicter celle
+             de la case qui le contient. -->
+        <div class="absolute inset-0">
+          <BoardPreview
+            :width="editor.map.width"
+            :height="editor.map.height"
+            :tiles="placedTiles"
+            mode="topDown"
+            editable
+            @tile-down="handleTileDown"
+            @tile-drag="handleTileDrag"
+          />
+        </div>
+      </div>
+
+      <!-- Outils de la carte, collés au plateau sans le recouvrir : ils agissent
+           sur ce qu'on regarde, et le bas de l'écran ne garde que ce qui conclut
+           le travail (nommer, tester, sauvegarder). -->
+      <div class="flex shrink-0 justify-center gap-2 border-t border-ink/10 p-2">
+        <IconButton
+          icon="ri-play-line"
+          label="Tester"
+          :disabled="!isPlayable"
+          @click="handleTest"
+        />
+        <IconButton
+          icon="ri-save-line"
+          label="Sauvegarder"
+          :disabled="!hasName"
+          @click="handleSave"
+        />
+        <span aria-hidden="true" class="mx-1 w-px self-stretch bg-ink/15" />
         <IconButton
           icon="ri-eye-line"
           label="Visualiser en 3D"
@@ -227,19 +275,6 @@ onMounted(() => {
         />
       </div>
     </div>
-
-    <input
-      v-model="editor.mapName"
-      type="text"
-      placeholder="Nom de la carte"
-      class="rounded-lg border border-ink/10 bg-ink/10 px-3 py-2 text-sm text-ink placeholder:text-ink/40"
-    />
-
-    <div class="flex gap-2">
-      <AppButton class="flex-1" :disabled="!isPlayable" @click="handleTest">Tester</AppButton>
-      <AppButton class="flex-1" :disabled="!hasName" @click="handleSave">Sauvegarder</AppButton>
-    </div>
-    <p v-if="notice" class="text-center text-xs text-amber-400">{{ notice }}</p>
 
     <BoardViewDialog
       v-if="viewing"

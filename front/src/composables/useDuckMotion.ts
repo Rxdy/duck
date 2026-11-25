@@ -33,6 +33,16 @@ export function createDuckMotion(x: number, y: number) {
 
   return {
     poseAt,
+    /** Pivote sur place, sans changer de case : un ordre bloqué par un mur. */
+    face(dx: number, dy: number, now: number, reducedMotion = false) {
+      const next = headingFor(dx, dy);
+      if (next === undefined || next === heading) return;
+      from = poseAt(now);
+      heading = next;
+      if (reducedMotion) from = { ...from, heading };
+      start = now;
+      duration = reducedMotion ? 0 : GLIDE_MS;
+    },
     moveTo(nextX: number, nextY: number, now: number, reducedMotion = false) {
       const dx = nextX - target.x;
       const dy = nextY - target.y;

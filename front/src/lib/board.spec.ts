@@ -13,6 +13,9 @@ import {
   mixHexColors,
   tileColor,
   WALL_HEIGHT,
+  zoomBounds,
+  closeUpZoom,
+  CLOSE_UP_HALF_VIEW,
 } from "./board.js";
 
 describe("buildBoardTiles", () => {
@@ -93,13 +96,6 @@ describe("buildBoardMeshes", () => {
     });
 
     expect(meshAt(withBase, 1, 0)!.color).toBe(meshAt(withoutBase, 1, 0)!.color);
-  });
-
-  it("follows the interface theme", () => {
-    const dark = buildBoardMeshes({ width: 1, height: 1, theme: "dark" });
-    const light = buildBoardMeshes({ width: 1, height: 1, theme: "light" });
-
-    expect(dark[0]!.color).not.toBe(light[0]!.color);
   });
 });
 
@@ -202,9 +198,9 @@ describe("tileColor", () => {
   });
 
   it("falls back to the checkerboard shade for empty tiles or no editor data", () => {
-    expect(tileColor("empty", "light")).toBe("#33415b");
-    expect(tileColor("empty", "dark")).toBe("#28374d");
-    expect(tileColor(undefined, "light")).toBe("#33415b");
+    expect(tileColor("empty", "light")).toBe("#38414f");
+    expect(tileColor("empty", "dark")).toBe("#2e3643");
+    expect(tileColor(undefined, "light")).toBe("#38414f");
   });
 });
 
@@ -230,11 +226,11 @@ describe("directionFacing", () => {
 
 describe("mixHexColors", () => {
   it("returns the base color untouched at ratio 0", () => {
-    expect(mixHexColors("#28374d", "#ff4d6d", 0)).toBe("#28374d");
+    expect(mixHexColors("#2e3643", "#ff4d6d", 0)).toBe("#2e3643");
   });
 
   it("returns the tint color untouched at ratio 1", () => {
-    expect(mixHexColors("#28374d", "#ff4d6d", 1)).toBe("#ff4d6d");
+    expect(mixHexColors("#2e3643", "#ff4d6d", 1)).toBe("#ff4d6d");
   });
 
   it("blends partway between the two colors", () => {
@@ -243,7 +239,7 @@ describe("mixHexColors", () => {
 });
 
 describe("applyTerritoryTint", () => {
-  const floor = "#28374d";
+  const floor = "#2e3643";
   const playerColor = "#ff4d6d";
 
   it("leaves the floor color untouched with no bases nearby", () => {
@@ -309,5 +305,44 @@ describe("isWebglAvailable", () => {
     expect(isWebglAvailable()).toBe(true);
 
     HTMLCanvasElement.prototype.getContext = original;
+  });
+});
+
+describe("zoomBounds", () => {
+  const full = { left: -10, right: 10, top: 5, bottom: -5 };
+
+  it("centre le cadre sur le canard", () => {
+    expect(zoomBounds(full, 2, { x: 1, y: 0 })).toEqual({
+      left: -4,
+      right: 6,
+      top: 2.5,
+      bottom: -2.5,
+    });
+  });
+
+  it("s'arrête au bord du cadre complet", () => {
+    expect(zoomBounds(full, 2, { x: 100, y: -100 })).toEqual({
+      left: 0,
+      right: 10,
+      top: 0,
+      bottom: -5,
+    });
+  });
+
+  it("rend le cadre complet sans zoom", () => {
+    expect(zoomBounds(full, 1, { x: 7, y: 3 })).toEqual(full);
+  });
+});
+
+describe("closeUpZoom", () => {
+  it("montre la même étendue quelle que soit la taille de la carte", () => {
+    for (const half of [8, 16, 30]) {
+      const zoom = closeUpZoom({ left: -half, right: half, top: half * 2, bottom: -half * 2 });
+      expect(half / zoom).toBeCloseTo(CLOSE_UP_HALF_VIEW);
+    }
+  });
+
+  it("ne dézoome jamais une carte minuscule", () => {
+    expect(closeUpZoom({ left: -2, right: 2, top: 2, bottom: -2 })).toBe(1);
   });
 });

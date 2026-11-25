@@ -32,4 +32,10 @@ describe("createDuckMotion", () => {
     motion.moveTo(2, 1, 0, true);
     expect(motion.poseAt(0).x).toBe(2);
   });
+
+  it("pivote sur place quand le pas est bloqué", () => {
+    const motion = createDuckMotion(1, 1);
+    motion.face(-1, 0, 0);
+    expect(motion.poseAt(GLIDE_MS)).toMatchObject({ x: 1, y: 1, heading: -Math.PI / 2 });
+  });
 });

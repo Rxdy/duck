@@ -22,3 +22,13 @@ describe("directionForTap", () => {
     expect(directionForTap(0.45, 0.4)).toBe("LEFT");
   });
 });
+
+describe("directionForTap autour du canard", () => {
+  it("juge le côté par rapport au canard, pas au milieu de l'écran", () => {
+    const duck = { x: 0.2, y: 0.8 };
+    expect(directionForTap(0.4, 0.6, duck)).toBe("UP");
+    expect(directionForTap(0.1, 0.6, duck)).toBe("LEFT");
+    expect(directionForTap(0.4, 0.9, duck)).toBe("RIGHT");
+    expect(directionForTap(0.1, 0.9, duck)).toBe("DOWN");
+  });
+});

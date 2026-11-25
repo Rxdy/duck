@@ -1,44 +1,62 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from "vue";
-import { useRoute } from "vue-router";
+import { computed, onBeforeUnmount, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useGameStore } from "../store/gameStore.js";
 import { useSettingsStore } from "../store/settingsStore.js";
-import { useAuthStore } from "../store/authStore.js";
-import { useGameSocket } from "../composables/useGameSocket.js";
+import { leaveMatch, searchMatch, sendMove } from "../lib/matchSession.js";
 import { useKeyboardControls } from "../composables/useKeyboardControls.js";
 import { resolvePlayerColor } from "../lib/colorblind.js";
 import { wireTileToKind } from "../lib/mapEditor.js";
 import type { BotLevel, GameMode } from "../types.js";
 
 // Modes acceptés dans l'URL (voir pages/Play.vue).
-const MODES: GameMode[] = ["duel", "ffa3", "ffa4"];
+const MODES: GameMode[] = ["duel", "ffa4"];
 const BOT_LEVELS: BotLevel[] = ["debutant", "intermediaire", "confirme", "expert", "impossible"];
 import AppButton from "../components/atoms/AppButton.vue";
+import MiniMap from "../components/molecules/MiniMap.vue";
+import CountdownOverlay from "../components/molecules/CountdownOverlay.vue";
+import { useCountdown } from "../composables/useCountdown.js";
+import { useCloseUp } from "../composables/useCloseUp.js";
+import type { ScreenPoint } from "../lib/touchZones.js";
 import BoardPreview from "../components/organisms/BoardPreview.vue";
-import TapZoneControls from "../components/organisms/TapZoneControls.vue";
+import GameStage from "../components/organisms/GameStage.vue";
 import ScoreHud from "../components/organisms/ScoreHud.vue";
 
 const route = useRoute();
 const store = useGameStore();
 const settings = useSettingsStore();
-const auth = useAuthStore();
-// Pseudo du compte si connecté, sinon un nom générique — jamais "Player" en
-// dur, qui s'affichait toujours à la place du vrai pseudo.
-// Mode choisi dans /jouer (voir pages/Play.vue). Valeur inattendue (URL
-// tapée à la main) -> duel, plutôt qu'un JOIN que le serveur refuserait.
-const mode = MODES.includes(route.query.mode as GameMode) ? (route.query.mode as GameMode) : "duel";
+const router = useRouter();
 // Niveau des bots forçable depuis l'URL (?bot=expert) : de quoi comparer une
 // partie contre chaque niveau sans redémarrer le serveur. Absent -> le niveau
 // par défaut du serveur.
 const botLevel = BOT_LEVELS.includes(route.query.bot as BotLevel)
   ? (route.query.bot as BotLevel)
   : undefined;
-const { move, restart } = useGameSocket(
-  "lobby",
-  auth.session?.username ?? "Joueur",
-  mode,
-  botLevel,
-);
+// Cette page AFFICHE la partie ; la connexion et la recherche vivent dans
+// lib/matchSession.ts. Arrivée par une carte de mode (/jeu?mode=...) : on lance
+// la recherche et on rend la main sur l'accueil.
+const started = computed(() => store.queue !== null && store.playableAt !== null);
+const asked = MODES.includes(route.query.mode as GameMode)
+  ? (route.query.mode as GameMode)
+  : undefined;
+if (!started.value) {
+  if (asked) searchMatch(asked, botLevel);
+  if (asked || !store.queue) void router.replace("/");
+}
+
+const move = sendMove;
+
+function restart() {
+  const queue = store.queue;
+  if (!queue) return;
+  searchMatch(queue.mode, queue.botLevel);
+  void router.push("/");
+}
+
+// Quitter l'écran d'une partie commencée, c'est la quitter.
+onBeforeUnmount(() => {
+  if (started.value) leaveMatch();
+});
 useKeyboardControls(move);
 
 // Fallback inerte le temps que le message MAP arrive (juste après le JOIN) :
@@ -52,6 +70,11 @@ const placedTiles = computed(
     ) ?? [],
 );
 
+const closeUp = useCloseUp(() => store.playableAt !== null);
+const countdown = useCountdown(() => store.playableAt);
+
+const duckOnScreen = ref<ScreenPoint>();
+
 const displayPlayers = computed(() =>
   store.players.map((player) => ({
     ...player,
@@ -60,38 +83,6 @@ const displayPlayers = computed(() =>
 );
 
 const winner = computed(() => displayPlayers.value.find((p) => p.id === store.winnerId));
-
-// Compte à rebours de l'attente (voir back/src/matchmaking.ts). Le serveur
-// n'envoie WAITING qu'aux changements — une arrivée — et non chaque seconde :
-// c'est donc au client d'égrener le temps entre deux messages, en repartant de
-// l'échéance annoncée à chaque fois qu'elle est rafraîchie.
-const msLeft = ref(0);
-let ticker: ReturnType<typeof setInterval> | null = null;
-
-function stopTicker() {
-  if (ticker === null) return;
-  clearInterval(ticker);
-  ticker = null;
-}
-
-watch(
-  () => store.waiting,
-  (waiting) => {
-    if (!waiting) {
-      stopTicker();
-      return;
-    }
-    msLeft.value = waiting.startsInMs;
-    ticker ??= setInterval(() => {
-      msLeft.value = Math.max(0, msLeft.value - 250);
-    }, 250);
-  },
-  { immediate: true },
-);
-
-onUnmounted(stopTicker);
-
-const secondsLeft = computed(() => Math.ceil(msLeft.value / 1000));
 
 // Classement de fin de partie : par score décroissant, le vainqueur devant en
 // cas d'égalité (il a atteint le score requis en premier). Le HUD en jeu, lui,
@@ -108,72 +99,39 @@ const rankedPlayers = computed(() =>
 </script>
 
 <template>
-  <div class="relative h-full w-full">
-    <BoardPreview
-      :width="store.map?.width ?? FALLBACK_SIZE"
-      :height="store.map?.height ?? FALLBACK_SIZE"
-      :tiles="placedTiles"
-      :players="displayPlayers"
-    />
-    <ScoreHud :players="displayPlayers" />
-    <TapZoneControls
-      :haptics-enabled="settings.hapticsEnabled"
-      :reduced-motion="settings.reducedMotion"
-      @move="move"
-    />
-
-    <div
-      v-if="store.waiting"
-      class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-6 bg-surface-deep/90 text-center"
-    >
-      <RouterLink
-        to="/jouer"
-        aria-label="Quitter la file"
-        class="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-ink/10 text-ink/70"
-      >
-        ✕
-      </RouterLink>
-
-      <p class="text-sm uppercase tracking-widest text-ink/50">En attente d'adversaires</p>
-
-      <p class="text-4xl font-bold tabular-nums">
-        {{ displayPlayers.length }}<span class="text-ink/40">/{{ store.waiting.capacity }}</span>
-      </p>
-
-      <div class="flex w-full max-w-xs flex-col gap-2">
-        <div
-          v-for="player in displayPlayers"
-          :key="player.id"
-          class="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold"
-        >
-          <span class="h-3 w-3 shrink-0 rounded-full" :style="{ backgroundColor: player.color }" />
-          {{ player.name }}
-        </div>
-      </div>
-
-      <!-- Le délai est un PLAFOND : la partie part avant si la salle se
-           remplit. Le dire évite que le joueur croie devoir attendre la fin
-           du compte à rebours dans tous les cas. -->
-      <p class="text-sm text-ink/50">
-        <template v-if="secondsLeft > 0">
-          Des adversaires vous rejoignent dans {{ secondsLeft }}&nbsp;s
-        </template>
-        <template v-else>Constitution de la partie…</template>
-      </p>
-    </div>
+  <div v-if="started" class="relative h-full w-full">
+    <GameStage :anchor="duckOnScreen" @move="move">
+      <BoardPreview
+        :width="store.map?.width ?? FALLBACK_SIZE"
+        :height="store.map?.height ?? FALLBACK_SIZE"
+        :tiles="placedTiles"
+        :players="displayPlayers"
+        :close-up="closeUp"
+        @follow-moved="duckOnScreen = $event"
+        :follow-id="store.playerId ?? undefined"
+      />
+      <template #overlay>
+        <ScoreHud :players="displayPlayers" :me-id="store.playerId ?? undefined" />
+        <MiniMap
+          v-if="closeUp"
+          :width="store.map?.width ?? FALLBACK_SIZE"
+          :height="store.map?.height ?? FALLBACK_SIZE"
+          :tiles="placedTiles"
+          :players="displayPlayers"
+          :me-id="store.playerId ?? undefined"
+        />
+        <CountdownOverlay
+          :label="countdown.label.value"
+          :anchor="duckOnScreen"
+          :on-duck="closeUp"
+        />
+      </template>
+    </GameStage>
 
     <div
       v-if="winner"
-      class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-6 bg-surface-deep/90 text-center"
+      class="absolute inset-0 z-20 flex flex-col items-center gap-6 overflow-y-auto bg-surface-deep/90 px-4 py-6 text-center [justify-content:safe_center] short:gap-3 short:py-3"
     >
-      <RouterLink
-        to="/jouer"
-        aria-label="Fermer"
-        class="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-ink/10 text-ink/70"
-      >
-        ✕
-      </RouterLink>
-
       <p class="text-sm uppercase tracking-widest text-ink/50">Partie terminée</p>
 
       <div class="flex w-full max-w-xs flex-col gap-2">
@@ -195,9 +153,12 @@ const rankedPlayers = computed(() =>
         </div>
       </div>
 
-      <div class="flex w-full max-w-xs gap-2">
-        <AppButton class="flex-1" variant="primary" @click="restart">Rejouer</AppButton>
-        <AppButton class="flex-1" to="/jouer">Changer de mode</AppButton>
+      <div class="flex w-full max-w-xs flex-col gap-2">
+        <div class="flex gap-2">
+          <AppButton class="flex-1" variant="primary" @click="restart">Rejouer</AppButton>
+          <AppButton class="flex-1" to="/jouer">Changer de mode</AppButton>
+        </div>
+        <AppButton class="text-center" to="/">Quitter</AppButton>
       </div>
     </div>
   </div>

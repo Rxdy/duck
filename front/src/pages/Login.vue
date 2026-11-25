@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import GoogleSignIn from "../components/molecules/GoogleSignIn.vue";
 import { ref } from "vue";
 import { useRouter } from "vue-router";
 import { useAuthStore } from "../store/authStore.js";
@@ -26,7 +27,9 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <div class="mx-auto flex h-full max-w-sm flex-col justify-center gap-4 px-4 py-6">
+  <div
+    class="mx-auto flex h-full max-w-sm flex-col gap-4 overflow-y-auto px-4 py-6 [justify-content:safe_center]"
+  >
     <h1 class="text-2xl font-bold">Se connecter</h1>
 
     <form class="flex flex-col gap-3" @submit.prevent="handleSubmit">
@@ -59,9 +62,13 @@ async function handleSubmit() {
       </button>
     </form>
 
+    <GoogleSignIn />
+
     <p class="text-center text-sm text-ink/50">
       Pas de compte ?
-      <RouterLink to="/inscription" class="text-cyan-400">S'inscrire</RouterLink>
+      <RouterLink to="/inscription" class="inline-block px-2 py-2 text-cyan-400"
+        >S'inscrire</RouterLink
+      >
     </p>
   </div>
 </template>

@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import type { PlayerState } from "../types.js";
+import type { BotLevel, GameMode, PlayerState } from "../types.js";
 
 export interface GameMapInfo {
   width: number;
@@ -10,10 +10,17 @@ export interface GameMapInfo {
 export const useGameStore = defineStore("game", {
   state: () => ({
     players: [] as PlayerState[],
+    // Ce qu'on cherche ou joue en ligne (voir lib/matchSession.ts). Nul hors file.
+    queue: null as { mode: GameMode; botLevel?: BotLevel } | null,
     map: null as GameMapInfo | null,
     // Défini quand le serveur envoie END (voir useGameSocket.ts) : la partie
     // est terminée, plus aucun coup n'est accepté côté serveur.
     winnerId: null as string | null,
+    // Fin du décompte de départ, sur l'horloge du navigateur. Nul tant que le
+    // plateau n'est pas montré.
+    playableAt: null as number | null,
+    // Son propre joueur (message MAP). Inconnu en entraînement, où l'on est le premier.
+    playerId: null as string | null,
     // Défini quand le serveur refuse la demande (message ERROR) : la partie
     // n'a jamais commencé.
     error: null as string | null,
@@ -24,6 +31,9 @@ export const useGameStore = defineStore("game", {
     waiting: null as { capacity: number; startsInMs: number } | null,
   }),
   actions: {
+    setQueue(queue: { mode: GameMode; botLevel?: BotLevel } | null) {
+      this.queue = queue;
+    },
     setPlayers(players: PlayerState[]) {
       this.players = players;
     },
@@ -32,6 +42,12 @@ export const useGameStore = defineStore("game", {
     },
     setMap(map: GameMapInfo) {
       this.map = map;
+    },
+    setPlayerId(playerId: string | null) {
+      this.playerId = playerId;
+    },
+    setPlayableAt(playableAt: number | null) {
+      this.playableAt = playableAt;
     },
     setWinner(winnerId: string | null) {
       this.winnerId = winnerId;
@@ -47,8 +63,11 @@ export const useGameStore = defineStore("game", {
      */
     reset() {
       this.players = [];
+      this.queue = null;
       this.map = null;
       this.winnerId = null;
+      this.playerId = null;
+      this.playableAt = null;
       this.error = null;
       this.waiting = null;
     },

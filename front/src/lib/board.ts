@@ -1,3 +1,4 @@
+import { Vector3, type OrthographicCamera } from "three";
 import { isSpawnKind, spawnColor } from "./mapEditor.js";
 import type { TileKind } from "./mapEditor.js";
 
@@ -18,20 +19,20 @@ export function buildBoardTiles(width: number, height: number): BoardTile[] {
 }
 
 /**
- * Palettes du plateau. Le rendu 3D ne peut pas hériter des variables CSS du
- * thème : ses couleurs partent dans des matériaux WebGL, pas dans du style.
- * Elles sont donc dupliquées ici, et choisies au moment du rendu.
+ * Couleurs du plateau. Le rendu 3D ne peut pas hériter des variables CSS : ses
+ * couleurs partent dans des matériaux WebGL, pas dans du style.
  */
 const BOARD_PALETTE = {
-  dark: { wall: "#6b7280", floorLight: "#33415b", floorDark: "#28374d", background: "#020617" },
-  light: { wall: "#94a3b8", floorLight: "#dbe3ef", floorDark: "#c8d3e2", background: "#f1f5f9" },
+  wall: "#6b7280",
+  floorLight: "#38414f",
+  floorDark: "#2e3643",
+  // Le fond de page (--surface-deep) : le plateau flotte sur l'écran, sans cadre.
+  background: "#0f1218",
 } as const;
 
-export type BoardTheme = keyof typeof BOARD_PALETTE;
-
 /** Couleur de fond du canvas, derrière le plateau. */
-export function boardBackground(theme: BoardTheme = "dark"): string {
-  return BOARD_PALETTE[theme].background;
+export function boardBackground(): string {
+  return BOARD_PALETTE.background;
 }
 
 /**
@@ -39,15 +40,11 @@ export function boardBackground(theme: BoardTheme = "dark"): string {
  * damier par défaut (cases "vides", ou aucune donnée d'éditeur fournie —
  * cas de l'aperçu pendant une partie en cours).
  *
- * Les couleurs de spawn, elles, ne changent pas avec le thème : ce sont les
- * couleurs des JOUEURS, elles doivent rester reconnaissables partout.
+ * Les couleurs de spawn sont celles des JOUEURS : elles restent reconnaissables
+ * partout.
  */
-export function tileColor(
-  kind: TileKind | undefined,
-  shade: "light" | "dark",
-  theme: BoardTheme = "dark",
-): string {
-  const palette = BOARD_PALETTE[theme];
+export function tileColor(kind: TileKind | undefined, shade: "light" | "dark"): string {
+  const palette = BOARD_PALETTE;
   if (kind === "wall") return palette.wall;
   if (kind && isSpawnKind(kind)) return spawnColor(kind);
   return shade === "light" ? palette.floorLight : palette.floorDark;
@@ -93,18 +90,17 @@ export function buildBoardMeshes(options: {
   width: number;
   height: number;
   tiles?: { x: number; y: number; kind: TileKind }[];
-  theme?: BoardTheme;
   /** Bases des joueurs : teintent le sol alentour. Vide -> aucun territoire. */
   bases?: TerritoryBase[];
 }): BoardMesh[] {
-  const { width, height, tiles, theme = "dark", bases = [] } = options;
+  const { width, height, tiles, bases = [] } = options;
   const overrides = new Map(tiles?.map((t) => [`${t.x},${t.y}`, t.kind]));
   const isWallAt = (x: number, y: number) => overrides.get(`${x},${y}`) === "wall";
 
   return buildBoardTiles(width, height).map((tile) => {
     const kind = overrides.get(`${tile.x},${tile.y}`);
     const blockHeight = kind === "wall" ? WALL_HEIGHT : FLOOR_HEIGHT;
-    const baseColor = tileColor(kind, tile.shade, theme);
+    const baseColor = tileColor(kind, tile.shade);
     // Le territoire ne recolore ni un mur ni une base : seules les cases
     // neutres en reçoivent la teinte.
     const isNeutralFloor = kind === undefined || kind === "empty";
@@ -397,4 +393,83 @@ export function isWebglAvailable(): boolean {
   } catch {
     return false;
   }
+}
+
+/** Hauteur à garder visible au-dessus du sol : un canard, antennes comprises. */
+const HEADROOM = 1.2;
+
+/**
+ * Ajuste une caméra déjà placée pour que le plateau remplisse son conteneur,
+ * quel que soit son format : les huit coins du volume sont projetés dans le
+ * repère de la caméra, puis le cadre est serré autour d'eux et recentré.
+ * `margin` vaut 1 pour un cadrage au ras des bords.
+ */
+export function fitCameraToBoard(
+  camera: OrthographicCamera,
+  width: number,
+  height: number,
+  aspect: number,
+  margin = 1.05,
+): void {
+  camera.updateMatrixWorld();
+  const xs: number[] = [];
+  const ys: number[] = [];
+  for (const x of [0, width]) {
+    for (const y of [-FLOOR_HEIGHT, HEADROOM]) {
+      for (const z of [0, height]) {
+        const corner = new Vector3(x, y, z).applyMatrix4(camera.matrixWorldInverse);
+        xs.push(corner.x);
+        ys.push(corner.y);
+      }
+    }
+  }
+  const [minX, maxX] = [Math.min(...xs), Math.max(...xs)];
+  const [minY, maxY] = [Math.min(...ys), Math.max(...ys)];
+  const halfHeight = (Math.max(maxY - minY, (maxX - minX) / aspect) / 2) * margin;
+  const centerX = (minX + maxX) / 2;
+  const centerY = (minY + maxY) / 2;
+
+  camera.left = centerX - halfHeight * aspect;
+  camera.right = centerX + halfHeight * aspect;
+  camera.top = centerY + halfHeight;
+  camera.bottom = centerY - halfHeight;
+  camera.updateProjectionMatrix();
+}
+
+export interface FrustumBounds {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/**
+ * Cadre zoomé à l'intérieur du cadre complet, centré sur `focus` (repère de la
+ * caméra) sans jamais sortir du cadre complet : près d'un bord, on ne montre pas
+ * du vide pour garder le canard au centre.
+ */
+export function zoomBounds(
+  full: FrustumBounds,
+  zoom: number,
+  focus: { x: number; y: number },
+): FrustumBounds {
+  const halfWidth = (full.right - full.left) / 2 / Math.max(1, zoom);
+  const halfHeight = (full.top - full.bottom) / 2 / Math.max(1, zoom);
+  const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
+  const x = clamp(focus.x, full.left + halfWidth, full.right - halfWidth);
+  const y = clamp(focus.y, full.bottom + halfHeight, full.top - halfHeight);
+  return { left: x - halfWidth, right: x + halfWidth, top: y + halfHeight, bottom: y - halfHeight };
+}
+
+/**
+ * Demi-étendue visible en gros plan, en unités du plateau, sur le petit côté de
+ * l'écran. La même partout : le canard est vu d'aussi près sur téléphone que sur
+ * ordinateur, et sur une petite carte que sur une grande.
+ */
+export const CLOSE_UP_HALF_VIEW = 3.2;
+
+/** Le zoom fixe qui donne ce gros plan depuis le cadre montrant tout le plateau. */
+export function closeUpZoom(full: FrustumBounds): number {
+  const shortHalf = Math.min(full.right - full.left, full.top - full.bottom) / 2;
+  return Math.max(1, shortHalf / CLOSE_UP_HALF_VIEW);
 }

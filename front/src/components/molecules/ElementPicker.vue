@@ -12,14 +12,14 @@ defineEmits<{ "update:modelValue": [tool: Tool] }>();
 </script>
 
 <template>
-  <div class="flex flex-wrap items-end gap-4">
+  <div class="flex flex-wrap items-end gap-3">
     <div class="flex flex-col items-center gap-1">
       <div class="flex items-center gap-2">
         <button
           v-for="(kind, index) in SPAWN_KINDS"
           :key="kind"
           type="button"
-          class="h-9 w-9 rounded-full border-2 transition"
+          class="h-8 w-8 rounded-full border-2 transition"
           :class="modelValue === kind ? 'scale-110 border-ink' : 'border-ink/20'"
           :style="{ backgroundColor: spawnColor(kind) }"
           :aria-label="`Spawn du joueur ${index + 1}`"

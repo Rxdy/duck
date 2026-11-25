@@ -3,7 +3,6 @@ import { computed, onMounted, ref, watch } from "vue";
 import { playableLabel } from "../../lib/mapEditor.js";
 import { renderMapThumbnail } from "../../lib/mapThumbnail.js";
 import type { SavedMap } from "../../lib/mapsApi.js";
-import { useSettingsStore } from "../../store/settingsStore.js";
 
 /**
  * Une carte du joueur, montrée par son PLATEAU plutôt que par son nom.
@@ -20,20 +19,19 @@ import { useSettingsStore } from "../../store/settingsStore.js";
 const props = defineProps<{ map: SavedMap }>();
 const emit = defineEmits<{ open: [] }>();
 
-const settings = useSettingsStore();
 const thumbnail = ref<string | undefined>();
 
-// Rendue à l'affichage, puis à chaque changement de thème ou de contenu : une
-// vignette sombre sur une interface claire se lit comme une image cassée.
+// Rendue à l'affichage, puis à chaque changement de contenu.
 function render() {
-  thumbnail.value = renderMapThumbnail(
-    { width: props.map.width, height: props.map.height, tiles: props.map.tiles },
-    settings.theme,
-  );
+  thumbnail.value = renderMapThumbnail({
+    width: props.map.width,
+    height: props.map.height,
+    tiles: props.map.tiles,
+  });
 }
 
 onMounted(render);
-watch([() => props.map, () => settings.theme], render, { deep: true });
+watch(() => props.map, render, { deep: true });
 
 // Dimensions JOUABLES : les bordures sont des murs que le joueur n'a jamais
 // choisis, les compter donnerait une taille qu'il ne reconnaîtrait pas.

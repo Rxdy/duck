@@ -36,6 +36,7 @@ export const DEFAULT_VISIBLE_MATCHES = 3;
 
 const MODE_LABELS: Record<string, string> = {
   duel: "Duel",
+  // Mode retiré, gardé pour les parties déjà enregistrées.
   ffa3: "FFA 3 joueurs",
   ffa4: "FFA 4 joueurs",
 };

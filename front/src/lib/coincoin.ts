@@ -12,15 +12,11 @@ import {
   CanvasTexture,
   Color,
   CylinderGeometry,
-  DataTexture,
   ExtrudeGeometry,
   Group,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
-  MeshStandardMaterial,
-  PlaneGeometry,
-  RepeatWrapping,
   Shape,
   Sprite,
   SpriteMaterial,
@@ -28,8 +24,6 @@ import {
   type Material,
   type Texture,
 } from "three";
-
-export type DuckFinish = "lisse" | "mat";
 
 /** Les antennes passent par ces couleurs, toujours dans cet ordre, sans jamais s'éteindre. */
 export const ANTENNA_COLORS = ["#ff5fe0", "#ffe23a", "#3fe06a", "#2f8cff"] as const;
@@ -96,23 +90,6 @@ function block(width: number, height: number, depth: number, radius: number): Bu
   return geometry;
 }
 
-/** Grain du rendu mat, généré par le code (même motif à chaque fois). */
-function grainTexture(): DataTexture {
-  const size = 64;
-  const data = new Uint8Array(size * size * 4);
-  let seed = 9;
-  for (let i = 0; i < size * size; i++) {
-    seed = (seed * 16807) % 2147483647;
-    const value = 110 + (seed % 100);
-    data.set([value, value, value, 255], i * 4);
-  }
-  const texture = new DataTexture(data, size, size);
-  texture.wrapS = texture.wrapT = RepeatWrapping;
-  texture.repeat.set(10, 10);
-  texture.needsUpdate = true;
-  return texture;
-}
-
 /** Dégradé rond des lueurs. `undefined` sans canvas 2D (tests) : pas de lueur. */
 function glowTexture(): CanvasTexture | undefined {
   const canvas = document.createElement("canvas");
@@ -137,18 +114,14 @@ export interface Coincoin {
   dispose(): void;
 }
 
-export function createCoincoin(color: string, finish: DuckFinish = "lisse"): Coincoin {
+export function createCoincoin(color: string): Coincoin {
   const group = new Group();
   const geometries: BufferGeometry[] = [];
   const materials: Material[] = [];
   const textures: Texture[] = [];
-  const grain = finish === "mat" ? grainTexture() : undefined;
-  if (grain) textures.push(grain);
 
-  function surface(hex: string): MeshStandardMaterial | MeshLambertMaterial {
-    const material = grain
-      ? new MeshStandardMaterial({ color: hex, roughness: 0.95, bumpMap: grain, bumpScale: 0.6 })
-      : new MeshLambertMaterial({ color: hex });
+  function surface(hex: string): MeshLambertMaterial {
+    const material = new MeshLambertMaterial({ color: hex });
     materials.push(material);
     return material;
   }
@@ -220,24 +193,27 @@ export function createCoincoin(color: string, finish: DuckFinish = "lisse"): Coi
     }
   }
 
-  // Halo discret : une légère lueur au sol
-  let floorGlow: MeshBasicMaterial | undefined;
+  // Aura autour du corps : c'est elle qui fait briller le canard. Rien au sol,
+  // sous le socle.
+  let aura: SpriteMaterial | undefined;
   if (glowMap) {
-    floorGlow = new MeshBasicMaterial({
+    aura = new SpriteMaterial({
       map: glowMap,
       color,
       blending: AdditiveBlending,
       depthWrite: false,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.5,
     });
-    materials.push(floorGlow);
-    const mesh = add(new PlaneGeometry(1.4, 1.4), floorGlow, 0, 0.006, 0);
-    mesh.rotation.x = -Math.PI / 2;
+    materials.push(aura);
+    const sprite = new Sprite(aura);
+    sprite.scale.set(1.9, 1.9, 1);
+    sprite.position.set(0, 0.62, 0);
+    group.add(sprite);
   }
 
   // Couleur propre : le fluo ne doit pas dépendre de l'éclairage du plateau.
-  function glowing(material: MeshStandardMaterial | MeshLambertMaterial, hex: string, k: number) {
+  function glowing(material: MeshLambertMaterial, hex: string, k: number) {
     material.color.set(hex);
     material.emissive.copy(new Color(hex)).multiplyScalar(k);
   }
@@ -246,8 +222,8 @@ export function createCoincoin(color: string, finish: DuckFinish = "lisse"): Coi
   const coincoin: Coincoin = {
     group,
     setColor(next) {
-      glowing(body, next, 0.3);
-      floorGlow?.color.set(next);
+      glowing(body, next, 0.42);
+      aura?.color.set(next);
     },
     setAntennaColor(next) {
       glowing(antenna, next, 0.8);

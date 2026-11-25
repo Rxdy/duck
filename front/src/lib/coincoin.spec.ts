@@ -48,8 +48,8 @@ describe("mouvement", () => {
 });
 
 describe("createCoincoin", () => {
-  it.each(["lisse", "mat"] as const)("se construit et se libère (%s)", (finish) => {
-    const duck = createCoincoin(PLAYER_COLORS[0], finish);
+  it("se construit et se libère", () => {
+    const duck = createCoincoin(PLAYER_COLORS[0]);
     expect(duck.group.children.filter((child) => child instanceof Mesh).length).toBeGreaterThan(10);
     duck.dispose();
   });

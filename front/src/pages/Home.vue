@@ -1,76 +1,61 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { PLAYER_COLORS } from "../theme.js";
 import MenuCard from "../components/molecules/MenuCard.vue";
+import { DUCK_GLOW, DUCK_IMAGES } from "../lib/ducks.js";
 import { useAuthStore } from "../store/authStore.js";
-import { useSettingsStore } from "../store/settingsStore.js";
 
 const auth = useAuthStore();
-const settings = useSettingsStore();
 
-/**
- * L'image de fond est la même dans les deux thèmes, mais pas son traitement :
- * assombrie pour que du texte clair passe dessus, éclaircie et effacée pour
- * que du texte foncé passe. Le dégradé, lui, part de la couleur de fond du
- * thème, donc il suit tout seul.
- */
-const backgroundFilter = computed(() =>
-  settings.theme === "light" ? "brightness-125 opacity-40" : "brightness-[0.35]",
-);
-
+// « Jouer » domine, les trois destinations courantes suivent, et les deux
+// secondaires se partagent une ligne.
 const menu = [
-  { to: "/jouer", label: "Jouer", desc: "Choisis un mode et lance une partie" },
-  { to: "/creatif", label: "Créatif", desc: "Crée et teste tes propres cartes" },
-  { to: "/classement", label: "Classement", desc: "Les meilleurs joueurs, et toi" },
-  { to: "/credits", label: "Crédits", desc: "Qui a fait ce jeu" },
-  { to: "/options", label: "Options", desc: "Réglages du jeu" },
+  { to: "/jouer", label: "Jouer", desc: "Duel ou FFA 4 joueurs" },
+  { to: "/entrainement", label: "Camp d'entraînement" },
+  { to: "/creatif", label: "Créatif" },
+  { to: "/classement", label: "Classement" },
 ];
-
-function hideOnError(event: Event) {
-  (event.target as HTMLImageElement).style.display = "none";
-}
+const secondary = [
+  { to: "/options", label: "Options" },
+  { to: "/credits", label: "Crédits" },
+];
 </script>
 
 <template>
-  <div class="relative h-full w-full overflow-hidden text-ink">
-    <img
-      src="/duck.png"
-      alt=""
-      aria-hidden="true"
-      :class="backgroundFilter"
-      class="animated-bg absolute inset-0 h-full w-full object-cover blur-md"
-    />
-    <div
-      class="absolute inset-0 bg-gradient-to-b from-surface-deep/30 via-surface-deep/70 to-surface-deep"
-    />
+  <!-- « safe » : centré quand tout tient, aligné en haut et défilable sinon.
+       Un simple centrage coupait le titre sur les petits écrans. Couché, le
+       canard passe à gauche du menu. -->
+  <div
+    class="flex h-full flex-col items-center gap-4 overflow-y-auto px-4 py-4 text-center text-ink [justify-content:safe_center] tiny:gap-2 tiny:py-2 short:flex-row short:justify-center short:gap-8 short:py-2"
+  >
+    <div class="flex shrink-0 flex-col items-center gap-1 short:w-40">
+      <img
+        :src="DUCK_IMAGES.rouge"
+        alt=""
+        class="duck-glow h-28 w-28 object-contain tiny:h-16 tiny:w-16 sm:h-36 sm:w-36 short:h-28 short:w-28"
+        :style="{ '--duck-glow': DUCK_GLOW[DUCK_IMAGES.rouge] }"
+      />
+      <h1 class="text-3xl font-bold tiny:text-2xl">Duck</h1>
+      <p class="text-sm text-ink/70">Rejoins la base adverse pour marquer.</p>
+    </div>
 
     <div
-      class="relative z-10 flex h-full flex-col items-center justify-center gap-8 px-4 py-8 text-center"
+      class="flex w-full max-w-sm shrink-0 flex-col gap-3 short:min-w-0 short:shrink tiny:gap-2 short:gap-1.5"
     >
-      <div>
-        <div class="flex items-center justify-center gap-3">
-          <!-- Le canard, en attendant une vraie mascotte dessinée : même image
-               que le favicon et l'icône installée, pour ne pas présenter trois
-               visages différents du même jeu. -->
-          <img
-            src="/duck-mark.png"
-            alt=""
-            class="h-16 w-16 object-contain drop-shadow-lg"
-            @error="hideOnError"
-          />
-          <h1 class="text-3xl font-extrabold sm:text-4xl">Bienvenue sur Duck</h1>
-        </div>
-        <p class="mt-2 text-ink/70">Rejoins la base adverse pour marquer des points.</p>
-      </div>
-
-      <nav class="grid w-full max-w-sm gap-3">
+      <nav class="grid grid-cols-2 gap-3 tiny:gap-2 short:gap-1.5">
         <MenuCard
           v-for="(item, index) in menu"
           :key="item.to"
           :to="item.to"
           :label="item.label"
           :description="item.desc"
-          :accent="PLAYER_COLORS[index % PLAYER_COLORS.length]!"
+          :primary="index === 0"
+          class="col-span-2"
+        />
+        <MenuCard
+          v-for="item in secondary"
+          :key="item.to"
+          :to="item.to"
+          :label="item.label"
+          class="!text-center"
         />
       </nav>
 
@@ -85,26 +70,3 @@ function hideOnError(event: Event) {
     </div>
   </div>
 </template>
-
-<style scoped>
-@keyframes duck-bg-drift {
-  0%,
-  100% {
-    transform: scale(1.15) translate(0, 0);
-  }
-  50% {
-    transform: scale(1.25) translate(-2%, 1.5%);
-  }
-}
-
-.animated-bg {
-  animation: duck-bg-drift 30s ease-in-out infinite;
-  will-change: transform;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animated-bg {
-    animation: none;
-  }
-}
-</style>

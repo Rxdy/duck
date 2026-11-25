@@ -8,11 +8,16 @@ import {
   buildBoardMeshes,
   computeIsometricFrame,
   computeTopDownFrame,
+  fitCameraToBoard,
   isWebglAvailable,
   SUN_POSITION,
   TILE_SIZE,
+  zoomBounds,
+  closeUpZoom,
+  type FrustumBounds,
   type TerritoryBase,
 } from "../../lib/board.js";
+import type { Direction } from "../../types.js";
 import type { TileKind } from "../../lib/mapEditor.js";
 import CoincoinDuck from "./CoincoinDuck.vue";
 
@@ -25,6 +30,7 @@ const props = withDefaults(
       x: number;
       y: number;
       color: string;
+      facing?: Direction;
       // Accessoire cosmétique équipé (voir lib/duckAccessories.ts). Pas encore
       // dessiné sur le canard (voir lib/coincoin.ts).
       accessory?: string;
@@ -44,19 +50,25 @@ const props = withDefaults(
     tiles?: { x: number; y: number; kind: TileKind }[];
     // Active le clic pour poser un élément (éditeur uniquement).
     editable?: boolean;
-    // Serre ou desserre le cadrage isométrique (voir board.ts#computeIsometricFrame).
-    // Par défaut : la marge confortable d'une partie en cours.
-    fit?: number;
+    // Gros plan : la caméra se rapproche du joueur `followId` et le suit.
+    closeUp?: boolean;
+    followId?: string;
+    // Case à rejoindre, mise en évidence (camp d'entraînement).
+    marker?: { x: number; y: number };
   }>(),
-  { mode: "isometric", editable: false },
+  { mode: "isometric", editable: false, closeUp: false },
 );
 
-const emit = defineEmits<{ tileClick: [x: number, y: number] }>();
+// Un tracé : la case où le doigt (ou la souris) se pose, puis chaque nouvelle
+// case survolée tant qu'il reste appuyé.
+const emit = defineEmits<{
+  tileDown: [x: number, y: number];
+  tileDrag: [x: number, y: number];
+  // Où se trouve à l'écran le joueur suivi, en proportions du plateau affiché.
+  followMoved: [point: { x: number; y: number }];
+}>();
 
-// Le plateau suit le thème de l'interface : un rectangle noir au milieu d'un
-// écran clair se lit comme une image qui n'a pas chargé.
 const settings = useSettingsStore();
-const boardTheme = computed(() => settings.theme);
 
 const territoryBases = computed<TerritoryBase[]>(
   () =>
@@ -76,7 +88,6 @@ const renderTiles = computed(() =>
     width: props.width,
     height: props.height,
     tiles: props.tiles,
-    theme: boardTheme.value,
     bases: territoryBases.value,
   }),
 );
@@ -98,41 +109,76 @@ const containerRef = ref<HTMLElement | null>(null);
 const containerAspect = ref(1);
 let resizeObserver: ResizeObserver | undefined;
 
-/**
- * Format de conteneur pour lequel les cadrages de board.ts sont calibrés. En
- * dessous (conteneur plus haut que large : téléphone en portrait, aperçu en
- * colonne), la caméra orthographique ne montre QUE `viewSize * aspect` en
- * largeur — le plateau, plus large que haut à l'écran, se retrouve coupé sur
- * les côtés. On élargit alors la vue d'autant.
- *
- * Valeurs empiriques, vérifiées à l'écran. Le cadrage exact consisterait à
- * projeter les quatre coins du plateau dans le repère caméra et à ajuster au
- * plus juste : plus rien à calibrer, et plus de marge perdue en portrait —
- * mais ça touche des fonctions de board.ts utilisées partout, à faire à
- * froid plutôt qu'en passant.
- */
-const CALIBRATED_ASPECT = { isometric: 1.4, topDown: 1 } as const;
-
 function updateCamera() {
   const frame =
     props.mode === "topDown"
       ? computeTopDownFrame(props.width, props.height)
-      : computeIsometricFrame(props.width, props.height, props.fit);
+      : computeIsometricFrame(props.width, props.height);
 
-  const aspect = containerAspect.value;
-  const viewSize = frame.viewSize * Math.max(1, CALIBRATED_ASPECT[props.mode] / aspect);
-
-  camera.left = -viewSize * aspect;
-  camera.right = viewSize * aspect;
-  camera.top = viewSize;
-  camera.bottom = -viewSize;
   camera.near = 0.1;
   camera.far = 1000;
   camera.up.set(...frame.up);
   camera.position.set(...frame.position);
   camera.lookAt(...frame.target);
+  fitCameraToBoard(camera, props.width, props.height, containerAspect.value);
+  fullFrame = { left: camera.left, right: camera.right, top: camera.top, bottom: camera.bottom };
+  shownFocus = undefined;
+  applyZoom(1);
+}
+
+let fullFrame: FrustumBounds = { left: -1, right: 1, top: 1, bottom: -1 };
+let shownFocus: { x: number; y: number } | undefined;
+
+// Le zoom affiché rejoint celui demandé en douceur : le rapprochement se voit.
+let shownZoom = 1;
+
+/** `ease` vaut 1 pour se placer d'un coup, moins pour rejoindre le canard en douceur. */
+function applyZoom(ease: number) {
+  const wanted = props.closeUp ? closeUpZoom(fullFrame) : 1;
+  shownZoom += (wanted - shownZoom) * ease;
+  if (Math.abs(wanted - shownZoom) < 0.005) shownZoom = wanted;
+  const player = props.players?.find((p) => p.id === props.followId);
+  if (shownZoom <= 1 || !player) {
+    Object.assign(camera, fullFrame);
+    camera.updateProjectionMatrix();
+    return;
+  }
+  camera.updateMatrixWorld();
+  const goal = new Vector3(player.x + 0.5, 0.4, player.y + 0.5).applyMatrix4(
+    camera.matrixWorldInverse,
+  );
+  shownFocus = shownFocus
+    ? {
+        x: shownFocus.x + (goal.x - shownFocus.x) * ease,
+        y: shownFocus.y + (goal.y - shownFocus.y) * ease,
+      }
+    : { x: goal.x, y: goal.y };
+  Object.assign(camera, zoomBounds(fullFrame, shownZoom, shownFocus));
   camera.updateProjectionMatrix();
 }
+
+let followFrame: number | undefined;
+let reported = { x: -1, y: -1 };
+function reportFollowed() {
+  const player = props.players?.find((p) => p.id === props.followId);
+  if (!player) return;
+  camera.updateMatrixWorld();
+  const point = new Vector3(player.x + 0.5, 0.4, player.y + 0.5).project(camera);
+  const next = { x: (point.x + 1) / 2, y: (1 - point.y) / 2 };
+  if (Math.abs(next.x - reported.x) + Math.abs(next.y - reported.y) < 0.004) return;
+  reported = next;
+  emit("followMoved", next);
+}
+
+function follow() {
+  if (props.closeUp || shownZoom > 1) applyZoom(settings.reducedMotion ? 1 : 0.08);
+  reportFollowed();
+  followFrame = requestAnimationFrame(follow);
+}
+onMounted(follow);
+onUnmounted(() => {
+  if (followFrame !== undefined) cancelAnimationFrame(followFrame);
+});
 
 onMounted(() => {
   if (!containerRef.value) return;
@@ -148,7 +194,7 @@ onMounted(() => {
 onUnmounted(() => resizeObserver?.disconnect());
 
 // Recadre à chaque changement de taille ou de mode de vue.
-watch([() => props.width, () => props.height, () => props.mode, () => props.fit], updateCamera, {
+watch([() => props.width, () => props.height, () => props.mode], updateCamera, {
   immediate: true,
 });
 
@@ -158,8 +204,8 @@ watch([() => props.width, () => props.height, () => props.mode, () => props.fit]
 const raycaster = new Raycaster();
 const groundPlane = new Plane(new Vector3(0, 1, 0), 0);
 
-function handleClick(event: MouseEvent) {
-  if (!props.editable || !containerRef.value) return;
+function tileAt(event: PointerEvent): { x: number; y: number } | undefined {
+  if (!containerRef.value) return;
 
   const rect = containerRef.value.getBoundingClientRect();
   const ndc = new Vector2(
@@ -171,13 +217,46 @@ function handleClick(event: MouseEvent) {
   const point = new Vector3();
   if (!raycaster.ray.intersectPlane(groundPlane, point)) return;
 
-  emit("tileClick", Math.floor(point.x), Math.floor(point.z));
+  return { x: Math.floor(point.x), y: Math.floor(point.z) };
+}
+
+let stroke: { pointerId: number; x: number; y: number } | undefined;
+
+function startStroke(event: PointerEvent) {
+  if (!props.editable || stroke || event.button !== 0) return;
+  const tile = tileAt(event);
+  if (!tile) return;
+  // Le tracé continue même si le doigt déborde du plateau puis y revient.
+  containerRef.value?.setPointerCapture?.(event.pointerId);
+  stroke = { pointerId: event.pointerId, ...tile };
+  emit("tileDown", tile.x, tile.y);
+}
+
+function continueStroke(event: PointerEvent) {
+  if (!stroke || event.pointerId !== stroke.pointerId) return;
+  const tile = tileAt(event);
+  if (!tile || (tile.x === stroke.x && tile.y === stroke.y)) return;
+  stroke = { pointerId: stroke.pointerId, ...tile };
+  emit("tileDrag", tile.x, tile.y);
+}
+
+function endStroke(event: PointerEvent) {
+  if (event.pointerId === stroke?.pointerId) stroke = undefined;
 }
 </script>
 
 <template>
-  <div ref="containerRef" class="h-full w-full" @click="handleClick">
-    <TresCanvas v-if="webglAvailable" :camera="camera" :clear-color="boardBackground(boardTheme)">
+  <!-- touch-none : sur l'éditeur, glisser le doigt dessine au lieu de faire défiler. -->
+  <div
+    ref="containerRef"
+    class="h-full w-full"
+    :class="editable ? 'touch-none select-none' : ''"
+    @pointerdown="startStroke"
+    @pointermove="continueStroke"
+    @pointerup="endStroke"
+    @pointercancel="endStroke"
+  >
+    <TresCanvas v-if="webglAvailable" :camera="camera" :clear-color="boardBackground()">
       <!-- Une ambiante trop forte aplatit tout (chaque face reçoit la même
            lumière peu importe son orientation) : baissée au profit d'une
            directionnelle plus marquée. C'est le contraste entre les faces d'un
@@ -198,11 +277,29 @@ function handleClick(event: MouseEvent) {
         <TresMeshStandardMaterial :color="tile.color" />
       </TresMesh>
 
+      <template v-if="props.marker">
+        <TresMesh
+          :position="[props.marker.x + 0.5, 0.03, props.marker.y + 0.5]"
+          :rotation="[-Math.PI / 2, 0, 0]"
+        >
+          <TresRingGeometry :args="[0.28, 0.44, 4, 1, Math.PI / 4]" />
+          <TresMeshBasicMaterial color="#fde047" />
+        </TresMesh>
+        <TresMesh
+          :position="[props.marker.x + 0.5, 1.9, props.marker.y + 0.5]"
+          :rotation="[Math.PI, 0, 0]"
+        >
+          <TresConeGeometry :args="[0.26, 0.5, 4]" />
+          <TresMeshBasicMaterial color="#fde047" />
+        </TresMesh>
+      </template>
+
       <CoincoinDuck
         v-for="player in props.players ?? []"
         :key="player.id"
         :x="player.x"
         :y="player.y"
+        :facing="player.facing"
         :color="player.color"
         :immune-for-ms="player.immuneForMs ?? 0"
       />

@@ -1,20 +1,25 @@
 import type { Direction } from "../types.js";
 
-/**
- * Détermine la direction de déplacement à partir d'un tap sur l'écran de jeu,
- * en coordonnées relatives (0..1) dans le conteneur du plateau. On se base sur
- * le quadrant diagonal par rapport au CENTRE de l'écran (haut-droite,
- * bas-droite, bas-gauche, haut-gauche) plutôt que sur des bandes
- * horizontales/verticales : ces 4 quadrants s'alignent avec les 4 arêtes du
- * plateau isométrique (vu en losange à l'écran), ce qui est beaucoup plus
- * instinctif qu'un découpage qui ne correspond à rien visuellement.
- */
-export function directionForTap(relX: number, relY: number): Direction {
-  const dx = relX - 0.5;
-  const dy = relY - 0.5;
+/** Point de l'écran en coordonnées relatives (0..1) dans le conteneur du plateau. */
+export interface ScreenPoint {
+  x: number;
+  y: number;
+}
 
-  if (dx >= 0 && dy < 0) return "UP";
-  if (dx >= 0 && dy >= 0) return "RIGHT";
-  if (dx < 0 && dy >= 0) return "DOWN";
-  return "LEFT";
+export const SCREEN_CENTER: ScreenPoint = { x: 0.5, y: 0.5 };
+
+/**
+ * Direction d'un tap selon le côté touché par rapport au CANARD qu'on joue
+ * (`anchor`), que la caméra zoomée le tienne au centre ou non. Quatre
+ * quadrants plutôt que des bandes : ils s'alignent avec les quatre sens du
+ * plateau isométrique, vu en losange.
+ */
+export function directionForTap(
+  relX: number,
+  relY: number,
+  anchor: ScreenPoint = SCREEN_CENTER,
+): Direction {
+  const right = relX >= anchor.x;
+  if (relY < anchor.y) return right ? "UP" : "LEFT";
+  return right ? "RIGHT" : "DOWN";
 }

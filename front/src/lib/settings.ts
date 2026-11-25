@@ -2,11 +2,8 @@ import type { Direction } from "../types.js";
 
 export type KeyBindings = Record<Direction, string>;
 
-/** Thème de l'interface (voir src/style.css pour les deux palettes). */
-export type Theme = "dark" | "light";
-
-/** Matière du canard (voir lib/coincoin.ts). */
-export type DuckFinishSetting = "lisse" | "mat";
+/** Au doigt : des boutons sous le plateau, ou les quatre quarts de l'écran. */
+export type TouchControlsSetting = "boutons" | "zones";
 
 export interface Settings {
   musicVolume: number;
@@ -15,8 +12,7 @@ export interface Settings {
   hapticsEnabled: boolean;
   reducedMotion: boolean;
   colorblindMode: boolean;
-  theme: Theme;
-  duckFinish: DuckFinishSetting;
+  touchControls: TouchControlsSetting;
 }
 
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
@@ -33,10 +29,8 @@ export const DEFAULT_SETTINGS: Settings = {
   hapticsEnabled: true,
   reducedMotion: false,
   colorblindMode: false,
-  // Sombre par défaut : c'est ce que voit un nouveau venu avant même que ses
-  // réglages soient lus, et le jeu a été dessiné comme ça.
-  theme: "dark",
-  duckFinish: "lisse",
+  // Des boutons par défaut : le doigt ne passe pas devant le plateau.
+  touchControls: "boutons",
 };
 
 function clampVolume(value: unknown, fallback: number): number {
@@ -77,11 +71,10 @@ export function parseSettings(raw: unknown): Settings {
       typeof r.reducedMotion === "boolean" ? r.reducedMotion : DEFAULT_SETTINGS.reducedMotion,
     colorblindMode:
       typeof r.colorblindMode === "boolean" ? r.colorblindMode : DEFAULT_SETTINGS.colorblindMode,
-    theme: r.theme === "light" || r.theme === "dark" ? r.theme : DEFAULT_SETTINGS.theme,
-    duckFinish:
-      r.duckFinish === "lisse" || r.duckFinish === "mat"
-        ? r.duckFinish
-        : DEFAULT_SETTINGS.duckFinish,
+    touchControls:
+      r.touchControls === "boutons" || r.touchControls === "zones"
+        ? r.touchControls
+        : DEFAULT_SETTINGS.touchControls,
   };
 }
 

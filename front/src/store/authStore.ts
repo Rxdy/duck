@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { login as loginApi, register as registerApi } from "../lib/authApi.js";
+import { login as loginApi, loginGoogle, register as registerApi } from "../lib/authApi.js";
 import { getOrCreateAnonId, renewAnonId } from "../lib/anonId.js";
 import { clearSession, loadSession, persistSession, type Session } from "../lib/session.js";
 
@@ -26,6 +26,16 @@ export const useAuthStore = defineStore("auth", {
     async login(identifier: string, password: string): Promise<string | undefined> {
       const result = await loginApi(identifier, password);
       if ("error" in result) return result.error;
+      this.session = result;
+      persistSession(result);
+      return undefined;
+    },
+    async loginWithGoogle(credential: string): Promise<string | undefined> {
+      const anonId = getOrCreateAnonId();
+      const result = await loginGoogle(credential, anonId);
+      if ("error" in result) return result.error;
+      // Comme à l'inscription : l'identité anonyme a pu être revendiquée.
+      renewAnonId();
       this.session = result;
       persistSession(result);
       return undefined;

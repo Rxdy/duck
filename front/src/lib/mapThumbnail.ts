@@ -16,7 +16,6 @@ import {
   isWebglAvailable,
   SUN_POSITION,
   TILE_SIZE,
-  type BoardTheme,
 } from "./board.js";
 import type { EditorMap } from "./mapEditor.js";
 import { toPlacedTiles } from "./mapEditor.js";
@@ -119,7 +118,7 @@ function acquire(): Renderer | undefined {
  * pas rendre de 3D — à l'appelant d'afficher autre chose plutôt que de
  * supposer qu'il y aura toujours une image (voir molecules/MapCard.vue).
  */
-export function renderMapThumbnail(map: EditorMap, theme: BoardTheme = "dark"): string | undefined {
+export function renderMapThumbnail(map: EditorMap): string | undefined {
   const context = acquire();
   if (!context) return undefined;
 
@@ -129,7 +128,6 @@ export function renderMapThumbnail(map: EditorMap, theme: BoardTheme = "dark"): 
     width: map.width,
     height: map.height,
     tiles: toPlacedTiles(map),
-    theme,
   });
 
   const drawn: Mesh[] = [];
@@ -154,7 +152,7 @@ export function renderMapThumbnail(map: EditorMap, theme: BoardTheme = "dark"): 
   camera.lookAt(...frame.target);
   camera.updateProjectionMatrix();
 
-  renderer.setClearColor(new Color(boardBackground(theme)), 1);
+  renderer.setClearColor(new Color(boardBackground()), 1);
   renderer.render(scene, camera);
   const image = renderer.domElement.toDataURL("image/png");
 

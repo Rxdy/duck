@@ -11,14 +11,14 @@ const router = createRouter({
 describe("ModeCard", () => {
   it("shows a Jouer link carrying the mode when ready", () => {
     const wrapper = mount(ModeCard, {
-      props: { label: "FFA 3 joueurs", description: "1v1v1", ready: true, to: "/jeu?mode=ffa3" },
+      props: { label: "FFA 4 joueurs", description: "1v1v1v1", ready: true, to: "/jeu?mode=ffa4" },
       global: { plugins: [router] },
     });
 
-    expect(wrapper.text()).toContain("FFA 3 joueurs");
+    expect(wrapper.text()).toContain("FFA 4 joueurs");
     expect(wrapper.findComponent(RouterLink).exists()).toBe(true);
     // Le mode voyage dans l'URL : sans lui, tous les modes lanceraient un duel.
-    expect(wrapper.findComponent(RouterLink).props("to")).toBe("/jeu?mode=ffa3");
+    expect(wrapper.findComponent(RouterLink).props("to")).toBe("/jeu?mode=ffa4");
     expect(wrapper.text()).not.toContain("Bientôt");
   });
 

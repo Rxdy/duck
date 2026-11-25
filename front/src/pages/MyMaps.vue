@@ -93,7 +93,12 @@ async function handleImport(event: Event) {
   <div class="flex h-full flex-col gap-3 px-4 py-6">
     <div class="flex items-center justify-between gap-3">
       <div class="flex items-center gap-3">
-        <RouterLink to="/creatif" aria-label="Retour" class="text-xl text-ink/60">←</RouterLink>
+        <RouterLink
+          to="/creatif"
+          aria-label="Retour"
+          class="text-xl text-ink/60 -m-2 inline-block px-3 py-2"
+          >←</RouterLink
+        >
         <h1 class="text-2xl font-bold">Mes cartes</h1>
       </div>
       <label

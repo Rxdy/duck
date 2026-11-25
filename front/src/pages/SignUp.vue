@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import GoogleSignIn from "../components/molecules/GoogleSignIn.vue";
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import PasswordStrength from "../components/molecules/PasswordStrength.vue";
-import { isPasswordAccepted, MIN_LENGTH } from "../lib/passwordStrength.js";
+import { isPasswordAccepted } from "../lib/passwordStrength.js";
 import { useAuthStore } from "../store/authStore.js";
 
 const router = useRouter();
@@ -26,7 +27,7 @@ async function handleSubmit() {
   error.value = null;
 
   if (!strongEnough.value) {
-    error.value = "Mot de passe trop faible.";
+    error.value = "Mot de passe pas encore assez sûr.";
     return;
   }
 
@@ -48,7 +49,9 @@ async function handleSubmit() {
 </script>
 
 <template>
-  <div class="mx-auto flex h-full max-w-sm flex-col justify-center gap-4 px-4 py-6">
+  <div
+    class="mx-auto flex h-full max-w-sm flex-col gap-4 overflow-y-auto px-4 py-6 [justify-content:safe_center]"
+  >
     <h1 class="text-2xl font-bold">S'inscrire</h1>
 
     <form class="flex flex-col gap-3" @submit.prevent="handleSubmit">
@@ -74,8 +77,7 @@ async function handleSubmit() {
         v-model="password"
         type="password"
         required
-        :minlength="MIN_LENGTH"
-        :placeholder="`Mot de passe (${MIN_LENGTH} caractères min.)`"
+        placeholder="Mot de passe"
         autocomplete="new-password"
         class="rounded-lg border border-ink/10 bg-ink/10 px-3 py-2 text-sm text-ink placeholder:text-ink/40"
       />
@@ -103,9 +105,13 @@ async function handleSubmit() {
       </button>
     </form>
 
+    <GoogleSignIn />
+
     <p class="text-center text-sm text-ink/50">
       Déjà un compte ?
-      <RouterLink to="/connexion" class="text-cyan-400">Se connecter</RouterLink>
+      <RouterLink to="/connexion" class="inline-block px-2 py-2 text-cyan-400"
+        >Se connecter</RouterLink
+      >
     </p>
   </div>
 </template>

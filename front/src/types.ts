@@ -14,6 +14,8 @@ export interface PlayerState {
   spawnX: number;
   spawnY: number;
   score: number;
+  // Côté vers lequel le canard est tourné, même bloqué contre un mur.
+  facing?: Direction;
   // Millisecondes d'intouchabilité restantes à la réception du message (voir
   // back/src/protocol.ts) : une durée, pas un instant, parce que l'horloge du
   // navigateur n'est pas celle du serveur.
@@ -21,12 +23,12 @@ export interface PlayerState {
 }
 
 /**
- * Les trois modes de la V1 (voir docs/02-gameplay.md#modes-de-jeu) : mêmes
+ * Les modes de la V1 (voir docs/02-gameplay.md#modes-de-jeu) : mêmes
  * règles, seul le nombre de joueurs change. Doit rester synchronisé à la main
  * avec GAME_MODES dans back/src/shared.ts — front/ ne partage pas de code
  * avec back/ (voir docs/06-architecture-technique.md).
  */
-export type GameMode = "duel" | "ffa3" | "ffa4";
+export type GameMode = "duel" | "ffa4";
 
 /**
  * Niveaux de bots (voir back/src/bots.ts) : la cadence et la qualité de
@@ -60,6 +62,8 @@ export interface MoveMessage {
 
 export interface StateMessage {
   type: "STATE";
+  // Temps restant du décompte de départ.
+  countdownMs?: number;
   players: PlayerState[];
 }
 
@@ -71,6 +75,8 @@ export interface StateMessage {
  */
 export interface MapMessage {
   type: "MAP";
+  // Identifiant de son propre joueur.
+  you?: string;
   width: number;
   height: number;
   tiles: string[][];

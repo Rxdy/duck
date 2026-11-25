@@ -1,73 +1,75 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import {
-  meetsRequirements,
+  isPasswordAccepted,
   passwordEntropy,
-  requirementsOf,
-  strengthOf,
+  REQUIRED_BITS,
+  REQUIRED_RATIO,
   strengthRatio,
 } from "../../lib/passwordStrength.js";
 
 /**
- * Jauge de robustesse affichée SOUS le champ mot de passe de l'inscription.
- *
- * Une barre continue plutôt que des segments : elle avance à chaque caractère
- * tapé, donc on voit que rallonger paie même quand on ne change pas de palier.
- * Elle change de couleur en franchissant un palier — c'est ce saut de couleur
- * qui signale qu'on vient de gagner un cran.
- *
- * Le socle obligatoire est listé à part : la barre note, la liste dit ce qui
- * BLOQUE. Confondre les deux laisserait un joueur devant un bouton grisé sans
- * savoir quoi corriger.
+ * Jauge sous le champ mot de passe de l'inscription : elle avance à chaque
+ * caractère. Un repère marque le minimum exigé, seule règle ; au-delà, elle
+ * continue de monter pour montrer qu'on peut faire mieux.
  */
 const props = defineProps<{ password: string }>();
 
 const bits = computed(() => passwordEntropy(props.password));
-const level = computed(() => strengthOf(props.password));
 const ratio = computed(() => strengthRatio(props.password));
-const requirements = computed(() => requirementsOf(props.password));
-const complete = computed(() => meetsRequirements(props.password));
+const enough = computed(() => isPasswordAccepted(props.password));
+const label = computed(() => {
+  if (!enough.value) return ratio.value < REQUIRED_RATIO / 2 ? "Trop faible" : "Encore un effort";
+  if (bits.value >= 100) return "Excellent";
+  return bits.value >= 80 ? "Solide" : "C'est bon !";
+});
+const color = computed(() => {
+  if (!enough.value) return ratio.value < REQUIRED_RATIO / 2 ? "bg-red-500" : "bg-amber-500";
+  return "bg-emerald-500";
+});
 </script>
 
 <template>
   <div v-if="password" class="flex flex-col gap-1.5">
     <div
-      class="h-2 overflow-hidden rounded-full bg-ink/10"
+      class="relative h-2 rounded-full bg-ink/10"
       role="progressbar"
       :aria-valuenow="ratio"
       aria-valuemin="0"
       aria-valuemax="100"
-      :aria-valuetext="`${level.label}, ${bits} bits d'entropie`"
-      aria-label="Robustesse du mot de passe"
+      :aria-valuetext="`${label}, ${bits} bits, minimum ${REQUIRED_BITS}`"
+      aria-label="Sécurité du mot de passe"
     >
       <div
+        data-fill
         class="h-full rounded-full transition-all duration-300"
-        :class="level.color"
+        :class="color"
         :style="{ width: `${ratio}%` }"
+      />
+      <!-- Le minimum : à franchir, pas à atteindre pile. -->
+      <span
+        data-minimum
+        aria-hidden="true"
+        class="absolute -top-1 h-4 w-0.5 rounded bg-ink/70"
+        :style="{ left: `${REQUIRED_RATIO}%` }"
       />
     </div>
 
     <div class="flex items-baseline justify-between gap-2 text-xs">
-      <!-- Annoncé aux lecteurs d'écran : sans ça, la couleur de la barre est
-           la seule information, et elle ne leur parvient pas. -->
-      <span class="font-semibold text-ink/80" aria-live="polite">{{ level.label }}</span>
-      <span class="text-ink/40">{{ bits }} bits</span>
+      <!-- Dit en toutes lettres : la couleur seule ne parvient pas à tout le monde. -->
+      <span
+        class="font-semibold"
+        :class="enough ? 'text-emerald-400' : 'text-ink/80'"
+        aria-live="polite"
+      >
+        <i v-if="enough" class="ri-check-line" aria-hidden="true" />
+        {{ label }}
+      </span>
+      <span class="tabular-nums text-ink/50">{{ bits }} bits · minimum {{ REQUIRED_BITS }}</span>
     </div>
 
-    <ul v-if="!complete" class="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-      <li
-        v-for="requirement in requirements"
-        :key="requirement.key"
-        class="flex items-center gap-1"
-        :class="requirement.met ? 'text-emerald-400' : 'text-ink/40'"
-      >
-        <i
-          :class="requirement.met ? 'ri-check-line' : 'ri-close-line'"
-          aria-hidden="true"
-          class="text-sm"
-        />
-        <span>{{ requirement.label }}</span>
-      </li>
-    </ul>
+    <p v-if="!enough" class="text-xs text-ink/50">
+      Rallonge-le, ou mêle majuscules, chiffres et symboles.
+    </p>
   </div>
 </template>

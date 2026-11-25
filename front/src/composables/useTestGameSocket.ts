@@ -20,6 +20,7 @@ export function useTestGameSocket(map: EditorMap) {
   const store = useGameStore();
   const settings = useSettingsStore();
   let socket: WebSocket | null = null;
+  store.reset();
 
   onMounted(() => {
     socket = new WebSocket(WS_URL);
@@ -46,6 +47,8 @@ export function useTestGameSocket(map: EditorMap) {
         const previousScores = new Map(store.players.map((p) => [p.id, p.score]));
         const anyoneScored = message.players.some((p) => p.score > (previousScores.get(p.id) ?? 0));
         store.setPlayers(message.players);
+        // Le premier état est reçu pendant le décompte, les suivants après.
+        if (message.countdownMs) store.setPlayableAt(Date.now() + message.countdownMs);
         if (anyoneScored) playScoreSfx(settings.sfxVolume);
       }
     });

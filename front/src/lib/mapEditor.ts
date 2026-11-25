@@ -68,6 +68,47 @@ export function placeTile(map: EditorMap, x: number, y: number, kind: TileKind):
   return { ...map, tiles };
 }
 
+/**
+ * Un point d'un tracé de murs : pose (`wall`) ou gomme (`empty`) sans jamais
+ * basculer, et sans toucher ni au contour ni aux bases déjà posées.
+ */
+export function paintWall(map: EditorMap, x: number, y: number, kind: "wall" | "empty"): EditorMap {
+  const current = map.tiles[y]?.[x];
+  if (current === undefined || current === kind || isSpawnKind(current)) return map;
+  if (isBorder(map.width, map.height, x, y)) return map;
+
+  const tiles = map.tiles.map((row, rowIndex) =>
+    rowIndex === y ? row.map((cell, colIndex) => (colIndex === x ? kind : cell)) : row,
+  );
+  return { ...map, tiles };
+}
+
+/**
+ * Les cases entre deux points d'un tracé, d'arrivée comprise. Un doigt rapide
+ * saute des cases entre deux événements : sans elles le mur serait troué. Elles
+ * se touchent par un côté, jamais par un seul coin, qui laisserait un passage.
+ */
+export function cellsBetween(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+): { x: number; y: number }[] {
+  const cells: { x: number; y: number }[] = [];
+  const nx = Math.abs(to.x - from.x);
+  const ny = Math.abs(to.y - from.y);
+  let { x, y } = from;
+  for (let ix = 0, iy = 0; ix < nx || iy < ny;) {
+    if ((ix + 0.5) / nx < (iy + 0.5) / ny) {
+      x += Math.sign(to.x - from.x);
+      ix++;
+    } else {
+      y += Math.sign(to.y - from.y);
+      iy++;
+    }
+    cells.push({ x, y });
+  }
+  return cells;
+}
+
 export function toPlacedTiles(map: EditorMap): { x: number; y: number; kind: TileKind }[] {
   const placed: { x: number; y: number; kind: TileKind }[] = [];
   map.tiles.forEach((row, y) => row.forEach((kind, x) => placed.push({ x, y, kind })));
@@ -81,7 +122,7 @@ export function toPlacedTiles(map: EditorMap): { x: number; y: number; kind: Til
 export function playableLabel(spawnCount: number): string {
   if (spawnCount < 2) return "Pas encore jouable";
   if (spawnCount === 2) return "Jouable en Duel (1v1)";
-  if (spawnCount === 3) return "Jouable en FFA 3 joueurs";
+  if (spawnCount === 3) return "Pose une 4e base (pas de partie à 3)";
   return "Jouable en 2v2 / FFA 4 joueurs";
 }
 

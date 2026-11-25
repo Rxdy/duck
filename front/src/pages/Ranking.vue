@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
+import IconButton from "../components/atoms/IconButton.vue";
+import RankingRow from "../components/molecules/RankingRow.vue";
+import RankingPodium from "../components/organisms/RankingPodium.vue";
 import { fetchRanking, type Ranking } from "../lib/rankingApi.js";
 import { useAuthStore } from "../store/authStore.js";
 
@@ -21,6 +24,21 @@ async function refresh() {
   loading.value = false;
 }
 
+// Le podium n'a de sens que sur le classement général : les résultats d'une
+// recherche ne sont pas les trois premiers.
+const showPodium = computed(() => ranking.value.top[0]?.rank === 1 && !search.value.trim());
+const listed = computed(() => (showPodium.value ? ranking.value.top.slice(3) : ranking.value.top));
+
+const searching = ref(false);
+const searchField = ref<HTMLInputElement | null>(null);
+
+async function toggleSearch() {
+  searching.value = !searching.value;
+  if (!searching.value) search.value = "";
+  await nextTick();
+  searchField.value?.focus();
+}
+
 onMounted(refresh);
 
 // Recherche déclenchée après une pause de frappe : une requête par lettre
@@ -33,50 +51,57 @@ watch(search, () => {
 </script>
 
 <template>
-  <div class="mx-auto flex h-full max-w-md flex-col gap-4 overflow-y-auto px-4 py-6">
-    <h1 class="text-2xl font-bold">Classement</h1>
+  <!-- Tout tient sur un écran : les lignes se partagent la hauteur restante.
+       Couché ou sur grand écran, le podium passe à gauche de la liste. -->
+  <div
+    class="mx-auto flex h-full max-w-md flex-col gap-2 overflow-hidden px-3 py-3 short:max-w-4xl short:flex-row short:gap-4 short:py-2 lg:max-w-4xl lg:flex-row lg:items-center lg:gap-8"
+  >
+    <div class="flex shrink-0 flex-col gap-2 short:w-2/5 short:justify-center lg:w-1/2 lg:gap-6">
+      <div class="flex items-center justify-between gap-3">
+        <h1 class="text-2xl font-bold lg:text-3xl">Classement</h1>
+        <IconButton
+          :icon="searching ? 'ri-close-line' : 'ri-search-line'"
+          :label="searching ? 'Fermer la recherche' : 'Chercher un joueur'"
+          @click="toggleSearch"
+        />
+      </div>
 
-    <div class="flex items-center gap-2 rounded-lg border border-ink/10 bg-surface px-3">
-      <i class="ri-search-line text-ink/40" aria-hidden="true" />
+      <!-- La recherche reste à portée sans prendre de place au classement. -->
       <input
+        v-if="searching"
+        ref="searchField"
         v-model="search"
         type="search"
         placeholder="Chercher un joueur"
         aria-label="Chercher un joueur"
-        class="w-full bg-transparent py-2 text-sm text-ink outline-none placeholder:text-ink/40"
+        class="panel w-full rounded-lg px-3 py-1.5 text-sm text-ink outline-none placeholder:text-ink/40"
+      />
+
+      <RankingPodium
+        v-if="showPodium && !loading"
+        :players="ranking.top.slice(0, 3)"
+        :me="auth.session?.username"
       />
     </div>
 
-    <p v-if="loading" class="text-center text-sm text-ink/40">Chargement…</p>
+    <div class="flex min-h-0 flex-1 flex-col justify-center lg:h-full lg:max-h-[40rem]">
+      <p v-if="loading" class="text-center text-sm text-ink/40">Chargement…</p>
 
-    <p v-else-if="ranking.top.length === 0" class="text-center text-sm text-ink/40">
-      {{ search ? "Aucun joueur à ce nom." : "Personne au classement pour l'instant." }}
-    </p>
+      <p v-else-if="ranking.top.length === 0" class="text-center text-sm text-ink/40">
+        {{ search ? "Aucun joueur à ce nom." : "Personne au classement pour l'instant." }}
+      </p>
 
-    <ul v-else class="flex flex-col gap-1">
-      <li
-        v-for="player in ranking.top"
-        :key="player.username"
-        class="flex items-center gap-3 rounded-lg border border-ink/10 px-3 py-2"
-        :class="player.username === auth.session?.username ? 'bg-cyan-500/15' : 'bg-surface'"
-      >
-        <span class="w-10 shrink-0 text-sm font-bold text-ink/40">{{ player.rank }}</span>
-        <span class="flex-1 truncate text-sm font-semibold">{{ player.username }}</span>
-        <span class="shrink-0 text-sm text-ink/60">{{ player.rating }}</span>
-      </li>
-
-      <!-- Hors du top : le joueur connecté vient quand même, à sa vraie
-           place. Les points de suspension disent qu'il y a du monde entre. -->
-      <template v-if="ranking.viewer">
-        <li class="py-1 text-center text-xs text-ink/30">⋯</li>
-        <li
-          class="flex items-center gap-3 rounded-lg border border-cyan-500/40 bg-cyan-500/15 px-3 py-2"
-        >
-          <span class="w-10 shrink-0 text-sm font-bold text-ink/60">{{ ranking.viewer.rank }}</span>
-          <span class="flex-1 truncate text-sm font-semibold">{{ ranking.viewer.username }}</span>
-          <span class="shrink-0 text-sm text-ink/60">{{ ranking.viewer.rating }}</span>
-        </li>
-      </template>
-    </ul>
+      <!-- Les dix premiers, et une onzième ligne pour le joueur connecté qui
+           n'y est pas, avec son vrai rang. -->
+      <ul v-else class="flex min-h-0 flex-1 flex-col justify-center gap-1">
+        <RankingRow
+          v-for="player in listed"
+          :key="player.username"
+          :player="player"
+          :highlight="player.username === auth.session?.username"
+        />
+        <RankingRow v-if="ranking.viewer" :player="ranking.viewer" highlight />
+      </ul>
+    </div>
   </div>
 </template>

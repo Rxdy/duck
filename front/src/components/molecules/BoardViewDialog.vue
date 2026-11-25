@@ -28,7 +28,7 @@ const emit = defineEmits<{ close: [] }>();
            bien plus large que haut, l'étirer en portrait ne fait qu'ajouter du
            vide au-dessus et en dessous. -->
       <div class="aspect-[4/3] overflow-hidden rounded-xl border border-ink/10 bg-surface-deep">
-        <BoardPreview :width="width" :height="height" :tiles="tiles" :fit="0.44" />
+        <BoardPreview :width="width" :height="height" :tiles="tiles" />
       </div>
       <AppButton class="shrink-0" @click="emit('close')">Fermer l'aperçu</AppButton>
     </div>

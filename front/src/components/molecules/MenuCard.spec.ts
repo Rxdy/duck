@@ -11,7 +11,7 @@ const router = createRouter({
 describe("MenuCard", () => {
   it("renders the label, description and links to the right route", () => {
     const wrapper = mount(MenuCard, {
-      props: { to: "/jouer", label: "Jouer", description: "Rejoins une partie", accent: "#FF4D6D" },
+      props: { to: "/jouer", label: "Jouer", description: "Rejoins une partie" },
       global: { plugins: [router] },
     });
 
@@ -20,13 +20,14 @@ describe("MenuCard", () => {
     expect(wrapper.findComponent(RouterLink).props("to")).toBe("/jouer");
   });
 
-  it("applies the accent color to the left border", () => {
-    const wrapper = mount(MenuCard, {
-      props: { to: "/jouer", label: "Jouer", description: "", accent: "#00C2D1" },
-      global: { plugins: [router] },
-    });
+  it("réserve l'accent à l'action principale", () => {
+    const mountCard = (primary: boolean) =>
+      mount(MenuCard, {
+        props: { to: "/jouer", label: "Jouer", description: "", primary },
+        global: { plugins: [router] },
+      });
 
-    // jsdom normalise les couleurs hex en rgb() dans l'attribut style.
-    expect(wrapper.get("a").attributes("style")).toContain("border-left-color: rgb(0, 194, 209)");
+    expect(mountCard(true).get("a").classes()).toContain("bg-cyan-500");
+    expect(mountCard(false).get("a").classes()).toContain("panel");
   });
 });

@@ -2,34 +2,39 @@
 import { computed, onMounted, ref } from "vue";
 import { fetchOfficialMaps, type OfficialMap } from "../lib/mapsApi.js";
 import ModeCard from "../components/molecules/ModeCard.vue";
+import ModalDialog from "../components/molecules/ModalDialog.vue";
+import RuleList from "../components/molecules/RuleList.vue";
+import { DUCK_IMAGES } from "../lib/ducks.js";
 import MapPreviewList from "../components/molecules/MapPreviewList.vue";
 
 /**
- * Les trois modes de la V1 (voir docs/02-gameplay.md#modes-de-jeu). Ils
+ * Les deux modes de la V1 (voir docs/02-gameplay.md#modes-de-jeu). Ils
  * partagent exactement les mêmes règles — seul le nombre de joueurs, donc de
  * bases à éviter et à atteindre, change.
  *
+ * Pas de FFA à 3 : les plateaux ont quatre côtés, un format à trois laisserait
+ * un joueur mieux placé que les autres.
+ *
  * Le 2v2 et la partie privée ne sont volontairement PAS listés : annoncer
  * "Bientôt" sur la moitié de l'écran donne l'impression d'un jeu vide, et
- * ils reviendront quand ils existeront. L'entraînement, lui, reste
- * accessible là où il a du sens — le bouton "Tester" de l'éditeur (voir
- * pages/Creative.vue).
+ * ils reviendront quand ils existeront.
  */
 const modes = [
-  { key: "duel", label: "Duel", desc: "1v1, premier à 15 points", players: 2, ready: true },
   {
-    key: "ffa3",
-    label: "FFA 3 joueurs",
-    desc: "1v1v1, premier à 15 points",
-    players: 3,
-    ready: true,
+    key: "duel",
+    label: "Duel",
+    desc: "1v1 : toi contre un seul adversaire.",
+    players: 2,
+    ducks: [DUCK_IMAGES.rouge, DUCK_IMAGES.cyan],
+    focus: "Une base à attaquer",
   },
   {
     key: "ffa4",
     label: "FFA 4 joueurs",
-    desc: "1v1v1v1, premier à 15 points",
+    desc: "1v1v1v1 : la mêlée générale.",
     players: 4,
-    ready: true,
+    ducks: [DUCK_IMAGES.rouge, DUCK_IMAGES.cyan, DUCK_IMAGES.jaune, DUCK_IMAGES.vert],
+    focus: "Trois bases à attaquer",
   },
 ];
 
@@ -38,15 +43,6 @@ onMounted(async () => {
   officialMaps.value = await fetchOfficialMaps();
 });
 
-/**
- * Un seul mode déplié à la fois : chaque aperçu ouvre un contexte WebGL, et
- * les afficher tous en ferait sauter (voir MapPreviewList.vue).
- */
-const expanded = ref<string | null>(null);
-function toggle(key: string) {
-  expanded.value = expanded.value === key ? null : key;
-}
-
 const mapsByMode = computed(() => {
   const grouped = new Map<number, OfficialMap[]>();
   for (const map of officialMaps.value) {
@@ -54,30 +50,67 @@ const mapsByMode = computed(() => {
   }
   return grouped;
 });
+
+function details(mode: (typeof modes)[number]) {
+  const count = mapsByMode.value.get(mode.players)?.length ?? 0;
+  return [
+    { icon: "ri-group-fill", text: `${mode.players} joueurs` },
+    { icon: "ri-flag-fill", text: mode.focus },
+    { icon: "ri-trophy-fill", text: "15 points" },
+    ...(count > 0
+      ? [{ icon: "ri-map-2-fill", text: `${count} carte${count > 1 ? "s" : ""}` }]
+      : []),
+  ];
+}
+
+/**
+ * Une seule fenêtre à la fois, et une seule carte affichée dedans : chaque aperçu
+ * ouvre un contexte WebGL (voir MapPreviewList.vue).
+ */
+const dialog = ref<{ kind: "maps" | "rules"; mode: (typeof modes)[number] } | null>(null);
 </script>
 
 <template>
-  <div class="mx-auto flex h-full max-w-md flex-col gap-4 overflow-y-auto px-4 py-6">
-    <h1 class="text-2xl font-bold">Jouer</h1>
+  <div
+    class="mx-auto flex h-full max-w-md flex-col gap-3 overflow-y-auto px-3 py-3 tiny:gap-2 tiny:py-2 short:max-w-4xl short:gap-2 short:py-2 lg:max-w-3xl lg:justify-center"
+  >
+    <div class="flex items-center justify-between gap-3">
+      <h1 class="text-2xl font-bold">Jouer</h1>
+      <RouterLink
+        to="/entrainement"
+        class="panel flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold"
+      >
+        <i class="accent-icon ri-graduation-cap-fill" aria-hidden="true" />
+        Camp d'entraînement
+      </RouterLink>
+    </div>
 
-    <div v-for="mode in modes" :key="mode.key" class="flex flex-col gap-2">
+    <div class="grid grid-cols-1 gap-3 tiny:gap-2 short:grid-cols-2 short:gap-2 lg:grid-cols-2">
       <ModeCard
+        v-for="mode in modes"
+        :key="mode.key"
         :label="mode.label"
         :description="mode.desc"
-        :ready="mode.ready"
+        :ready="true"
         :to="`/jeu?mode=${mode.key}`"
+        :ducks="mode.ducks"
+        :details="details(mode)"
+        class="lg:min-h-64"
+        @maps="dialog = { kind: 'maps', mode }"
+        @rules="dialog = { kind: 'rules', mode }"
       />
-
-      <button
-        type="button"
-        class="self-start text-xs text-cyan-400"
-        :aria-expanded="expanded === mode.key"
-        @click="toggle(mode.key)"
-      >
-        {{ expanded === mode.key ? "Masquer les cartes" : "Voir les cartes" }}
-      </button>
-
-      <MapPreviewList v-if="expanded === mode.key" :maps="mapsByMode.get(mode.players) ?? []" />
     </div>
+
+    <ModalDialog
+      v-if="dialog"
+      :title="`${dialog.mode.label} · ${dialog.kind === 'maps' ? 'cartes' : 'règles'}`"
+      @close="dialog = null"
+    >
+      <MapPreviewList
+        v-if="dialog.kind === 'maps'"
+        :maps="mapsByMode.get(dialog.mode.players) ?? []"
+      />
+      <RuleList v-else />
+    </ModalDialog>
   </div>
 </template>
