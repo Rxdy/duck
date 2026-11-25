@@ -4,7 +4,7 @@ Jeu multijoueur en ligne sur grille, inspiré des mini-jeux créés avec les Wir
 
 Domaine visé : `duck.mondomaine.fr`
 
-Ce dossier découpe le cahier des charges initial (voir [`../resultat.md`](../resultat.md) pour la conversation source brute) en fichiers thématiques, plus faciles à faire évoluer un par un.
+Ce dossier découpe le cahier des charges initial en fichiers thématiques, plus faciles à faire évoluer un par un.
 
 ## Sommaire
 
@@ -20,4 +20,4 @@ Ce dossier découpe le cahier des charges initial (voir [`../resultat.md`](../re
 
 ## Statut
 
-Squelette du monorepo en place (`apps/client`, `apps/server`, `packages/shared`, `packages/protocol`, `packages/game-engine`, `packages/map-generator`, `packages/editor`), avec CI, lint, tests et Docker. Prochaine étape : continuer l'implémentation en suivant la [roadmap](08-roadmap.md).
+Squelette du projet en place (`front`, `back` — avec le moteur de jeu, le protocole et l'éditeur en interne —, `db`), avec CI, lint, tests et Docker. Prochaine étape : continuer l'implémentation en suivant la [roadmap](08-roadmap.md).

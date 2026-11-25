@@ -1,0 +1,87 @@
+# Production sur le Raspberry Pi : les images sont construites par la CI (images.yml) et tirées depuis GHCR, rien n'est
+# compilé sur le Pi. Traefik (dépôt infra) découvre les labels tout seul : le DNS *.rxdy.fr pointe déjà sur le Pi, le
+# certificat HTTPS est automatique.
+#
+#   Un seul domaine, https://duck.rxdy.fr :
+#     /api/*  -> serveur (le préfixe est retiré : /api/me arrive en /me)
+#     /ws     -> serveur, WebSocket (wss://duck.rxdy.fr/ws, préfixe retiré)
+#     le reste -> front (nginx)
+#   Le front calcule ses adresses à partir du domaine (front/src/lib/serverUrl.ts) : aucune variable au build.
+#
+# Lancer :  cp .env.example .env  (puis mettre un vrai mot de passe)  &&  docker compose -f docker-compose.prod.yml up -d
+# Une version précise :  TAG=v1.0.0 docker compose -f docker-compose.prod.yml up -d
+name: duck
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: duck-db-prod
+    restart: unless-stopped
+    mem_limit: 256m
+    environment:
+      POSTGRES_USER: duck
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Définir POSTGRES_PASSWORD dans .env}
+      POSTGRES_DB: duck
+    volumes:
+      - duck_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U duck -d duck"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Aucun port publié et pas sur le réseau web : seul le serveur du jeu parle à la base.
+    networks:
+      - internal
+
+  back:
+    image: ghcr.io/rxdy/duck-back:${TAG:-latest}
+    container_name: duck-back-prod
+    restart: unless-stopped
+    mem_limit: 512m
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://duck:${POSTGRES_PASSWORD:?Définir POSTGRES_PASSWORD dans .env}@db:5432/duck
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://duck.rxdy.fr}
+    labels:
+      # Watchtower (mode --label-enable) met l'image à jour quand un nouveau « latest » est publié.
+      - com.centurylinklabs.watchtower.enable=true
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.duck-api.entrypoints=websecure
+      - traefik.http.routers.duck-api.rule=Host(`duck.rxdy.fr`) && (PathPrefix(`/api`) || PathPrefix(`/ws`))
+      - traefik.http.routers.duck-api.priority=20
+      - traefik.http.routers.duck-api.tls.certresolver=leresolver
+      - traefik.http.routers.duck-api.middlewares=duck-strip
+      - traefik.http.middlewares.duck-strip.stripprefix.prefixes=/api,/ws
+      - traefik.http.services.duck-api.loadbalancer.server.port=8080
+    networks:
+      - internal
+      - web
+
+  front:
+    image: ghcr.io/rxdy/duck-front:${TAG:-latest}
+    container_name: duck-front-prod
+    restart: unless-stopped
+    mem_limit: 64m
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.duck-front.entrypoints=websecure
+      - traefik.http.routers.duck-front.rule=Host(`duck.rxdy.fr`)
+      - traefik.http.routers.duck-front.priority=1
+      - traefik.http.routers.duck-front.tls.certresolver=leresolver
+      - traefik.http.services.duck-front.loadbalancer.server.port=80
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
+  internal:
+
+volumes:
+  duck_db:
