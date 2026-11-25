@@ -33,11 +33,23 @@ async function rendre(pieces, vue) {
 }
 
 await rendre([], "face");
-const { ACCESSOIRES, TENUES } = await page.evaluate("window.catalogue");
+const { ACCESSOIRES, TENUES, THEMES } = await page.evaluate("window.catalogue");
+
+// Un thème ne doit pas mettre deux accessoires au même emplacement : on le signale.
+for (const tenue of [...TENUES, ...THEMES]) {
+  const places = tenue.pieces.map((id) => ACCESSOIRES.find((a) => a.id === id)?.emplacement);
+  if (places.includes(undefined) || new Set(places).size !== places.length) {
+    console.error(`Tenue invalide : ${tenue.nom} (${places.join(", ")})`);
+    process.exitCode = 1;
+  }
+}
+const de = (...places) => ACCESSOIRES.filter((a) => places.includes(a.emplacement));
 const groupes = [
-  ["tete", "Tête (les antennes sont masquées)", ACCESSOIRES.filter((a) => a.emplacement === "tete")],
-  ["visage-corps", "Visage et corps", ACCESSOIRES.filter((a) => ["visage", "corps"].includes(a.emplacement))],
-  ["dos-tenues", "Dos, et tenues combinées", [...ACCESSOIRES.filter((a) => a.emplacement === "dos"), ...TENUES]],
+  ["tete", "Tête (les antennes sont masquées)", de("tete")],
+  ["visage-corps", "Visage et corps", de("visage", "corps")],
+  ["mains", "Dans la main", de("main")],
+  ["dos-tenues", "Dos, et premières tenues", [...de("dos"), ...TENUES]],
+  ["themes", "Tenues par thème", THEMES],
 ];
 
 for (const [fichier, titre, elements] of groupes) {
@@ -61,5 +73,16 @@ for (const [fichier, titre, elements] of groupes) {
 }
 
 const total = ACCESSOIRES.length;
-console.log(`${total} accessoires et ${TENUES.length} tenues rendus`);
+// À la taille réelle du jeu sur téléphone : ce qui reste lisible une fois petit.
+const vignettes = [];
+for (const element of [...de("main"), ...THEMES]) {
+  const png = await rendre(element.pieces ?? [element.id], "face");
+  vignettes.push(`<figure><img width="64" src="data:image/png;base64,${png.toString("base64")}"><figcaption>${element.nom}</figcaption></figure>`);
+}
+const petit = await navigateur.newPage({ viewport: { width: 900, height: 200 } });
+await petit.setContent(`<style>body{margin:0;padding:10px;background:#2e3643;color:#f1f5f9;font:11px system-ui;display:flex;flex-wrap:wrap;gap:8px}
+  figure{margin:0;width:90px;text-align:center}</style>${vignettes.join("")}`);
+await petit.screenshot({ path: join(ICI, "planche-taille-reelle.png"), fullPage: true });
+
+console.log(`${total} accessoires, ${TENUES.length + THEMES.length} tenues rendus`);
 await navigateur.close();

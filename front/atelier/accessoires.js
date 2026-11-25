@@ -10,6 +10,7 @@
  * z -0.31 à 0.25. Tête : x ±0.23, y 0.5 à 1.0, z -0.11 à 0.25.
  */
 import * as T from "three";
+import { NOUVEAUX, THEMES } from "./themes.js";
 
 function outils(duck, groupe) {
   const mat = (c, o = {}) => new T.MeshLambertMaterial({ color: c, ...o });
@@ -61,14 +62,30 @@ function outils(duck, groupe) {
     mesh.scale.set(sx, sy, sz);
     return mesh;
   };
-  return { mat, add, box, cyl, cone, boule, dome, tore, forme, habit };
+  /**
+   * Le canard n'a pas de bras : une moufle à SA couleur, posée sur le côté, tient
+   * l'objet. `dessiner` travaille dans un repère local, poignée à l'origine.
+   */
+  const enMain = (dessiner) => {
+    const main = new T.Group();
+    main.position.set(0.39, 0.33, 0.13);
+    main.rotation.z = -0.22;
+    groupe.add(main);
+    const source = piece(0.15);
+    const moufle = new T.Mesh(source.geometry, source.material);
+    moufle.scale.set(0.3, 0.38, 0.24);
+    moufle.position.set(-0.025, -0.075, 0.007);
+    main.add(moufle);
+    dessiner(outils(duck, main));
+  };
+  return { mat, add, box, cyl, cone, boule, dome, tore, forme, habit, enMain };
 }
 
 const corps = (o, couleur, hauteur = 0.945) => o.habit(0.15, couleur, 1.065, hauteur, 1.05);
 const bande = (o, couleur, y, epaisseur = 0.09) =>
   o.habit(0.15, couleur, 1.08, epaisseur, 1.062, y - 0.15);
 
-export const ACCESSOIRES = [
+const PREMIERE_SERIE = [
   // ---------------------------------------------------------------- tête
   {
     id: "chantier",
@@ -568,6 +585,10 @@ export const ACCESSOIRES = [
     },
   },
 ];
+
+/** Tout le catalogue : un accessoire au plus par emplacement dans une tenue. */
+export const ACCESSOIRES = [...PREMIERE_SERIE, ...NOUVEAUX];
+export { THEMES };
 
 function monture(o, couleur) {
   for (const x of [-0.105, 0.105]) {
