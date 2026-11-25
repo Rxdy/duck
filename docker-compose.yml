@@ -19,7 +19,9 @@ services:
 
   back:
     build:
-      context: ./back
+      # Contexte à la racine : l'image embarque db/init (schéma appliqué au démarrage du serveur).
+      context: .
+      dockerfile: back/Dockerfile
     ports:
       - "8080:8080"
     environment:

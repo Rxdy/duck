@@ -9,6 +9,7 @@ import { GameRoom, type MatchContext } from "./room.js";
 import { saveMapFile, type SavedMapPayload } from "./mapsStorage.js";
 import { listOfficialMaps, pickRandomOfficialMap } from "./officialMaps.js";
 import {
+  closeDb,
   DATABASE_URL,
   getMatchStats,
   listMatchesFor,
@@ -707,3 +708,21 @@ httpServer.listen(PORT, () => {
       console.error("Peuplement des bots impossible :", error);
     });
 });
+
+// Arrêt propre : Watchtower arrête le conteneur à chaque mise à jour. On prévient les joueurs connectés (code 1001,
+// « le serveur s'en va »), on ferme les connexions et la base, puis on sort avec le code 0. Délai maximal : 10 s.
+function shutdown(signal: string): void {
+  console.log(`${signal} reçu : arrêt du serveur`);
+  setTimeout(() => process.exit(1), 10_000).unref();
+  for (const client of wss.clients) client.close(1001, "server_shutdown");
+  wss.close();
+  httpServer.close(() => {
+    closeDb().then(
+      () => process.exit(0),
+      () => process.exit(1),
+    );
+  });
+  httpServer.closeAllConnections();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

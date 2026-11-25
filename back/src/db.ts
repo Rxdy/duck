@@ -34,6 +34,11 @@ export const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://duck:duck@lo
 const pool = new Pool({ connectionString: DATABASE_URL });
 export const db = drizzle(pool);
 
+/** Ferme les connexions à la base (arrêt propre du serveur). */
+export async function closeDb(): Promise<void> {
+  await pool.end();
+}
+
 /**
  * Enregistre le résultat d'une partie terminée (voir back/src/room.ts,
  * appelé depuis GameRoom#checkForWinner). Best-effort et non bloquant :
