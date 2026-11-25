@@ -148,7 +148,7 @@ Tout cela reste compatible avec un moteur de grille — pas besoin de physique c
 
 ## Modes de jeu
 
-**La V1 en propose trois : Duel, FFA 3 et FFA 4.** Les règles sont exactement les mêmes dans les trois — seul le **nombre de joueurs** change, donc le nombre de bases à atteindre et à défendre. C'est ce nombre qui décide de la carte jouée : le serveur choisit une carte officielle ayant exactement autant de bases (voir `back/src/officialMaps.ts`), et complète avec des bots tant qu'il manque des joueurs. Les modes ci-dessous qui ne sont pas dans cette liste (2v2, partie privée) ne sont pas encore proposés dans l'interface.
+**La V1 en propose deux : Duel et FFA 4.** Pas de partie à trois : les plateaux ont quatre côtés, un joueur serait mieux placé que les autres. Les règles sont exactement les mêmes dans les deux — seul le **nombre de joueurs** change, donc le nombre de bases à atteindre et à défendre. C'est ce nombre qui décide de la carte jouée : le serveur choisit une carte officielle ayant exactement autant de bases (voir `back/src/officialMaps.ts`), et complète avec des bots tant qu'il manque des joueurs. Les modes ci-dessous qui ne sont pas dans cette liste (2v2, partie privée) ne sont pas encore proposés dans l'interface.
 
 ### Duel (2 joueurs)
 
@@ -167,18 +167,6 @@ A B ------ C D
 
 4 joueurs, 2 équipes de 2. Une seule base et un seul score par équipe : entrer dans la base adverse (avec n'importe quel canard de l'équipe) rapporte un point à toute l'équipe. Premier à **10 points** gagne. Demande de la coordination avec son coéquipier plutôt qu'un simple face-à-face.
 
-### FFA 3 joueurs
-
-```
-      A
-
-           C
-
-      B
-```
-
-Chaque joueur possède sa propre base et son propre spawn. Entrer sur une base adverse rapporte **+1 point**, puis retour au spawn.
-
 ### FFA 4 joueurs
 
 ```
@@ -188,7 +176,7 @@ A       B
 C       D
 ```
 
-Même principe que le FFA 3 joueurs, avec 4 bases/spawns répartis sur la carte (très proche de l'esprit Habbo).
+Chaque joueur possède sa propre base et son propre spawn, répartis sur les quatre côtés de la carte (très proche de l'esprit Habbo). Entrer sur une base adverse rapporte des points, puis retour au spawn.
 
 ### Mode privé
 

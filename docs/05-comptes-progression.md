@@ -10,29 +10,19 @@
 
 ### Robustesse du mot de passe
 
-Deux règles qui se complètent au lieu de se doubler.
+Une seule règle : atteindre **60 bits d'entropie**. Ni longueur ni familles de caractères imposées — une longue phrase en
+minuscules passe, un court `Short1!` non. C'est un minimum, pas un plafond : la jauge de l'inscription le marque d'un repère et continue de monter au-delà
+(« C'est bon », « Solide », « Excellent »). Le serveur applique le même calcul (`back/src/passwordStrength.ts`, copie de celui du front à garder
+identique), puisqu'on peut poster sur `/auth/register` sans passer par le formulaire.
 
-**Le socle**, obligatoire : **10 caractères** minimum, et au moins une
-minuscule, une majuscule, un chiffre et un caractère spécial. Il est vérifié
-des deux côtés — la jauge du formulaire guide, elle ne protège pas, puisqu'on
-peut poster sur `/auth/register` sans passer par elle.
+C'est une estimation : elle pénalise les répétitions et les suites (`abcdef`, `123456`, `azerty`) mais ignore les
+dictionnaires et les fuites connues. Le corriger demanderait une bibliothèque dédiée (zxcvbn).
 
-**L'entropie**, au-dessus du socle : le formulaire d'inscription note ensuite
-le mot de passe en **bits**, sur une barre continue à huit paliers, de
-« Beaucoup trop faible » à « Redoutable ». Le socle seul laisserait passer
-`Aaaaaaaaa1!` — onze caractères, quatre familles, neuf fois la même lettre —
-que l'entropie, elle, refuse à 49 bits. L'échelle est calée sur ce que le socle
-produit au minimum (dix caractères dans les quatre familles valent ~66 bits,
-donc « Presque correct » commence là) et la barre n'est pleine qu'au dernier
-palier, à 160 bits : il doit toujours rester quelque chose à gagner pour qui
-veut faire mieux. `Canard2024!` pèse 66 bits, une phrase comme
-« Mon canard jaune adore le pain 7! » en pèse 161.
+### Pseudo et email uniques
 
-Cette note reste une estimation. Elle pénalise les répétitions et les suites
-(`abcdef`, `123456`, `azerty`) mais ignore les dictionnaires et les fuites
-connues : `Motdepasse123!` y paraît honnête alors que sa racine est en tête des
-listes d'attaque. Le corriger demanderait une bibliothèque dédiée (zxcvbn) et
-son dictionnaire embarqué.
+Uniques sans tenir compte de la casse (`db/init/13-unique-sans-casse.sql`) ; l'inscription dit lequel est pris, et la
+connexion accepte l'un ou l'autre quelle que soit la casse. Si une base contient déjà des doublons à la casse près,
+l'index correspondant n'est pas créé (avertissement au démarrage) et aucun compte n'est modifié.
 
 ### Récapitulatif des parties
 
@@ -116,3 +106,18 @@ Accueil, Jouer, Créer une carte, Mes cartes, Classement, Profil, Paramètres.
 ## Profil
 
 Pseudo, avatar, statistiques, succès, historique, cartes créées.
+
+## Activer la connexion avec Google
+
+Le bouton « Continuer avec Google » reste masqué tant que le serveur n'a pas d'identifiant client.
+
+1. Dans la [console Google Cloud](https://console.cloud.google.com/apis/credentials), créer un projet, configurer
+   l'écran de consentement OAuth, puis un « ID client OAuth » de type **Application Web**.
+2. « Origines JavaScript autorisées » : `https://duck.rxdy.fr`, et pour le développement `http://localhost:5173` et
+   `http://localhost`. Aucune URI de redirection n'est nécessaire.
+3. Donner l'ID client (pas le « secret », inutile ici) au serveur :
+   - développement : `GOOGLE_CLIENT_ID=... make dev` ;
+   - production : ligne `GOOGLE_CLIENT_ID=...` dans le `.env` à côté de `docker-compose.prod.yml`.
+
+Si l'adresse Google correspond à un compte existant créé par mot de passe, les deux sont rattachés. L'inscription ne
+vérifiant pas les adresses, l'ancien mot de passe et les sessions ouvertes sont alors effacés.

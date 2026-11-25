@@ -22,3 +22,5 @@ Ce dossier découpe le cahier des charges initial en fichiers thématiques, plus
 ## Statut
 
 Squelette du projet en place (`front`, `back` — avec le moteur de jeu, le protocole et l'éditeur en interne —, `db`), avec CI, lint, tests et Docker. Prochaine étape : continuer l'implémentation en suivant la [roadmap](08-roadmap.md).
+- [Nouveaux modes de jeu (règles)](11-nouveaux-modes.md)
+- [Reprendre le travail](reprise/REPRISE.md)
