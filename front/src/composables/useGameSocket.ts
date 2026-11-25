@@ -10,8 +10,7 @@ import {
 } from "../lib/audio.js";
 import { getOrCreateAnonId } from "../lib/anonId.js";
 import { useAuthStore } from "../store/authStore.js";
-
-const SERVER_URL = import.meta.env.VITE_SERVER_WS_URL ?? "ws://localhost:8080";
+import { WS_URL } from "../lib/serverUrl.js";
 
 export function useGameSocket(
   gameId: string,
@@ -29,7 +28,7 @@ export function useGameSocket(
   let started = false;
 
   function connect() {
-    socket = new WebSocket(SERVER_URL);
+    socket = new WebSocket(WS_URL);
     started = false;
 
     socket.addEventListener("open", () => {

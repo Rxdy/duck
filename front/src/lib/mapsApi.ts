@@ -1,7 +1,5 @@
 import type { EditorMap, TileKind } from "./mapEditor.js";
-
-const WS_URL = import.meta.env.VITE_SERVER_WS_URL ?? "ws://localhost:8080";
-const HTTP_URL = WS_URL.replace(/^ws/, "http");
+import { HTTP_URL } from "./serverUrl.js";
 
 /**
  * Cartes du joueur, stockées côté serveur (voir back/src/maps.ts) : la base

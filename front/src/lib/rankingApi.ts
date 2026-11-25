@@ -1,6 +1,4 @@
-const WS_URL = import.meta.env.VITE_SERVER_WS_URL ?? "ws://localhost:8080";
-const HTTP_URL = WS_URL.replace(/^ws/, "http");
-
+import { HTTP_URL } from "./serverUrl.js";
 /**
  * Une ligne du classement (voir back/src/rating.ts). `rank` est le rang
  * GÉNÉRAL, pas la position dans la liste renvoyée.

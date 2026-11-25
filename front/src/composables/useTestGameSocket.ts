@@ -10,8 +10,7 @@ import {
   startAmbientLoop,
   stopAmbientLoop,
 } from "../lib/audio.js";
-
-const SERVER_URL = import.meta.env.VITE_SERVER_WS_URL ?? "ws://localhost:8080";
+import { WS_URL } from "../lib/serverUrl.js";
 
 /**
  * Comme useGameSocket, mais rejoint une partie d'entraînement solo sur une
@@ -23,7 +22,7 @@ export function useTestGameSocket(map: EditorMap) {
   let socket: WebSocket | null = null;
 
   onMounted(() => {
-    socket = new WebSocket(SERVER_URL);
+    socket = new WebSocket(WS_URL);
 
     socket.addEventListener("open", () => {
       send(socket!, {
