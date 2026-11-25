@@ -208,7 +208,7 @@ export const NOUVEAUX = [
   // ---------------------------------------------------------------- visage
   piece("visage", "masque-heros", "Masque de héros", (o) => {
     o.habit(0.5, "#111827", 1.062, 0.17, 1.045, 0.315);
-    for (const x of [-0.1, 0.1]) o.box(0.15, 0.13, 0.008, "#ff5578", x, 0.84, 0.2605);
+    o.fenetre(0.19, 0.775, 0.905, 0.2605, 0.04);
   }),
   piece("visage", "visiere", "Visière futuriste", (o) => {
     const verre = o.mat("#22d3ee", { transparent: true, opacity: 0.62, emissive: "#0e7490" });
@@ -322,10 +322,8 @@ export const THEMES = [
   univers("capitaine", "Capitaine pirate", ["tricorne", "cacheoeil", "veste", "sabre"]),
   univers("galaxie", "Duel des étoiles", ["cagoule", "visiere", "cape", "lame-lumiere"]),
   univers("astronaute", "Astronaute", ["spatial", "combinaison", "jetpack"]),
-  univers("ninja", "Ninja", ["ninja", "masque-heros", "katana"]),
   univers("viking", "Viking", ["viking", "plastron", "hache", "cape-rouge"]),
   univers("ocean", "Roi des mers", ["couronne", "trident", "echarpe"]),
-  univers("egypte", "Pharaon", ["pharaon", "sceptre", "tablier"]),
   univers("sport", "Champion", ["casquette", "maillot", "ballon"]),
   univers("plage", "Vacances", ["paille", "soleil", "fleur"]),
   univers("halloween", "Nuit d'Halloween", ["sorcier", "ailes-nuit", "citrouille"]),

@@ -11,6 +11,9 @@
  */
 import * as T from "three";
 import { NOUVEAUX, THEMES } from "./themes.js";
+import { PIECES_LOT1, THEMES_LOT1 } from "./lot1.js";
+
+const PEAU = "peau";
 
 function outils(duck, groupe) {
   const mat = (c, o = {}) => new T.MeshLambertMaterial({ color: c, ...o });
@@ -48,7 +51,9 @@ function outils(duck, groupe) {
   const forme = (points, c, z) => {
     const s = new T.Shape();
     points.forEach(([x, y], i) => (i ? s.lineTo(x, y) : s.moveTo(x, y)));
-    return add(new T.ShapeGeometry(s), mat(c, { side: T.DoubleSide }), 0, 0, z);
+    // Sans couleur : la matière du canard lui-même, quelle que soit sa couleur.
+    const matiere = c === PEAU ? piece(0.15).material : mat(c, { side: T.DoubleSide });
+    return add(new T.ShapeGeometry(s), matiere, 0, 0, z);
   };
   const piece = (y) =>
     duck.group.children.find(
@@ -78,7 +83,24 @@ function outils(duck, groupe) {
     main.add(moufle);
     dessiner(outils(duck, main));
   };
-  return { mat, add, box, cyl, cone, boule, dome, tore, forme, habit, enMain };
+  /**
+   * Ouverture dans un couvre-chef fermé : un panneau à la couleur DU canard (jamais
+   * une couleur fixe) devant lequel les yeux du modèle ressortent.
+   */
+  const fenetre = (x, y0, y1, z, r = 0.05) => {
+    const s = new T.Shape();
+    s.moveTo(-x + r, y0);
+    s.lineTo(x - r, y0);
+    s.quadraticCurveTo(x, y0, x, y0 + r);
+    s.lineTo(x, y1 - r);
+    s.quadraticCurveTo(x, y1, x - r, y1);
+    s.lineTo(-x + r, y1);
+    s.quadraticCurveTo(-x, y1, -x, y1 - r);
+    s.lineTo(-x, y0 + r);
+    s.quadraticCurveTo(-x, y0, -x + r, y0);
+    return add(new T.ShapeGeometry(s), piece(0.15).material, 0, 0, z);
+  };
+  return { mat, add, box, cyl, cone, boule, dome, tore, forme, habit, enMain, fenetre };
 }
 
 const corps = (o, couleur, hauteur = 0.945) => o.habit(0.15, couleur, 1.065, hauteur, 1.05);
@@ -278,19 +300,7 @@ const PREMIERE_SERIE = [
     sansAntennes: true,
     creer(o) {
       o.habit(0.5, "#2f3542", 1.065, 1.025, 1.047);
-      const w = new T.Shape();
-      const [x, y0, y1, r] = [0.19, 0.775, 0.945, 0.05];
-      w.moveTo(-x + r, y0);
-      w.lineTo(x - r, y0);
-      w.quadraticCurveTo(x, y0, x, y0 + r);
-      w.lineTo(x, y1 - r);
-      w.quadraticCurveTo(x, y1, x - r, y1);
-      w.lineTo(-x + r, y1);
-      w.quadraticCurveTo(-x, y1, -x, y1 - r);
-      w.lineTo(-x, y0 + r);
-      w.quadraticCurveTo(-x, y0, -x + r, y0);
-      // Fenêtre des yeux, à la couleur du canard : les yeux du modèle restent devant.
-      o.add(new T.ShapeGeometry(w), o.mat("#ff5578"), 0, 0, 0.2592);
+      o.fenetre(0.19, 0.775, 0.945, 0.2592);
       o.habit(0.5, "#7dd3fc", 1.08, 0.045, 1.065, 0.425);
       o.habit(0.5, "#434b5c", 1.09, 0.13, 1.075, -0.005);
       o.box(0.025, 0.34, 0.012, "#7dd3fc", 0, 0.76, -0.124);
@@ -400,7 +410,7 @@ const PREMIERE_SERIE = [
           [0.035, 0.19],
           [-0.035, 0.19],
         ],
-        "#ff5578",
+        PEAU,
         0.2715,
       );
       o.forme(
@@ -410,7 +420,7 @@ const PREMIERE_SERIE = [
           [0.04, 0.2],
           [-0.04, 0.2],
         ],
-        "#ff5578",
+        PEAU,
         0.276,
       );
       for (const s of [-1, 1])
@@ -587,8 +597,8 @@ const PREMIERE_SERIE = [
 ];
 
 /** Tout le catalogue : un accessoire au plus par emplacement dans une tenue. */
-export const ACCESSOIRES = [...PREMIERE_SERIE, ...NOUVEAUX];
-export { THEMES };
+export const ACCESSOIRES = [...PREMIERE_SERIE, ...NOUVEAUX, ...PIECES_LOT1];
+export { THEMES, THEMES_LOT1 };
 
 function monture(o, couleur) {
   for (const x of [-0.105, 0.105]) {

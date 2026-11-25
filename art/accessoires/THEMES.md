@@ -1,4 +1,4 @@
-# Thèmes : 20 faits, 60 proposés
+# Thèmes : 30 faits sur 80
 
 Objectif : 80 thèmes. Méthode : **lister, trier, produire par lots de 10** (planche face et dos à chaque lot), valider,
 puis intégrer au jeu quand le catalogue est assez fourni.
@@ -15,11 +15,19 @@ les formes plates, les petits objets, tout ce qui repose sur le visage.
 Règles : au plus un accessoire par emplacement (tête, visage, corps, dos, main) ; canard jamais modifié ; sa couleur doit
 rester visible ; aucun personnage, logo ni nom protégé.
 
-## Faits (20)
+## Faits (30)
 
-Chevalier, garde royal, roi, apprenti sorcier, grand mage, capitaine pirate, duel des étoiles, astronaute, ninja *(à
-retravailler)*, viking, roi des mers, pharaon *(à retravailler)*, champion, vacances, nuit d'Halloween, réveillon,
-explorateur, cyber, chat de gouttière, justicier.
+**Départ (18) :** chevalier, garde royal, roi, apprenti sorcier, grand mage, capitaine pirate, duel des étoiles,
+astronaute, viking, roi des mers, champion, vacances, nuit d'Halloween, réveillon, explorateur, cyber, chat de
+gouttière, justicier.
+
+**Lot 1 (10, `lot1.js`) :** samouraï (11), robot (31), pompier (1), vampire (22), bonhomme de neige (51), gladiateur
+(12), pilote de course (38), rockeur (48), requin (58), champignon (59). Les numéros renvoient aux tableaux ci-dessous.
+
+**Refaits (2) :** ninja et pharaon.
+
+À surveiller : robot, ninja, vampire de dos, pilote et requin **cachent presque toute la couleur du canard**, qui sert à
+reconnaître les joueurs. Avant intégration, reprendre cette couleur sur une grande partie de la tenue.
 
 ## Métiers (10)
 

@@ -3,7 +3,7 @@
 Branche d'atelier `art/accessoires` : les accessoires évoluent ici, **sans toucher au jeu**. On les intégrera quand le
 catalogue sera assez fourni.
 
-- Code : `front/atelier/accessoires.js` et `themes.js` (57 accessoires, 25 tenues dont 20 par thème). L'atelier
+- Code : `front/atelier/accessoires.js` et `themes.js` (96 accessoires, 35 tenues dont 30 par thème), plus `lot1.js`. L'atelier
   n'entre pas dans le build.
 - Rendus : `rendus/` (face et dos) et les planches `planche-*.png` (dont `planche-taille-reelle.png`, à la taille du jeu sur téléphone), refaits par `rendre.mjs` (voir son en-tête).
 
@@ -20,7 +20,8 @@ catalogue sera assez fourni.
 
 ## À retravailler
 
-- Ninja, pharaon, tricorne : formes trop plates ou peu reconnaissables.
+- Tricorne : peu reconnaissable.
+- Plusieurs tenues cachent la couleur du joueur (voir `THEMES.md`).
 - Astronaute : la bulle assombrit le visage.
 - Combinaisons : une visière sur une cagoule, une cape avec un autre objet dans le dos, se mélangent mal.
 - À la taille du jeu, les petits objets (baguette, fleur, torche) se distinguent à peine : les grossir ?

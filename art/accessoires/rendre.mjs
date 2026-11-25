@@ -33,10 +33,10 @@ async function rendre(pieces, vue) {
 }
 
 await rendre([], "face");
-const { ACCESSOIRES, TENUES, THEMES } = await page.evaluate("window.catalogue");
+const { ACCESSOIRES, TENUES, THEMES, THEMES_LOT1 } = await page.evaluate("window.catalogue");
 
 // Un thème ne doit pas mettre deux accessoires au même emplacement : on le signale.
-for (const tenue of [...TENUES, ...THEMES]) {
+for (const tenue of [...TENUES, ...THEMES, ...THEMES_LOT1]) {
   const places = tenue.pieces.map((id) => ACCESSOIRES.find((a) => a.id === id)?.emplacement);
   if (places.includes(undefined) || new Set(places).size !== places.length) {
     console.error(`Tenue invalide : ${tenue.nom} (${places.join(", ")})`);
@@ -50,9 +50,10 @@ const groupes = [
   ["mains", "Dans la main", de("main")],
   ["dos-tenues", "Dos, et premières tenues", [...de("dos"), ...TENUES]],
   ["themes", "Tenues par thème", THEMES],
+  ["lot1", "Lot 1, ninja et pharaon refaits", THEMES_LOT1],
 ];
 
-for (const [fichier, titre, elements] of groupes) {
+for (const [fichier, titre, elements] of groupes.filter(([f]) => !process.env.LOT || f === process.env.LOT)) {
   const cartes = [];
   for (const element of elements) {
     const images = [];
@@ -75,7 +76,7 @@ for (const [fichier, titre, elements] of groupes) {
 const total = ACCESSOIRES.length;
 // À la taille réelle du jeu sur téléphone : ce qui reste lisible une fois petit.
 const vignettes = [];
-for (const element of [...de("main"), ...THEMES]) {
+for (const element of THEMES_LOT1) {
   const png = await rendre(element.pieces ?? [element.id], "face");
   vignettes.push(`<figure><img width="64" src="data:image/png;base64,${png.toString("base64")}"><figcaption>${element.nom}</figcaption></figure>`);
 }
@@ -84,5 +85,5 @@ await petit.setContent(`<style>body{margin:0;padding:10px;background:#2e3643;col
   figure{margin:0;width:90px;text-align:center}</style>${vignettes.join("")}`);
 await petit.screenshot({ path: join(ICI, "planche-taille-reelle.png"), fullPage: true });
 
-console.log(`${total} accessoires, ${TENUES.length + THEMES.length} tenues rendus`);
+console.log(`${total} accessoires, ${TENUES.length + THEMES.length + THEMES_LOT1.length} tenues rendus`);
 await navigateur.close();

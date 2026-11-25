@@ -5,7 +5,7 @@
     <script type="module">
       import * as T from "three";
       import { createCoincoin } from "/src/lib/coincoin.ts";
-      import { ACCESSOIRES, TENUES, THEMES, habiller } from "./accessoires.js";
+      import { ACCESSOIRES, TENUES, THEMES, THEMES_LOT1, habiller } from "./accessoires.js";
 
       const q = new URLSearchParams(location.search);
       const renderer = new T.WebGLRenderer({
@@ -40,6 +40,7 @@
         ACCESSOIRES: ACCESSOIRES.map(({ id, nom, emplacement }) => ({ id, nom, emplacement })),
         TENUES,
         THEMES,
+        THEMES_LOT1,
       };
     </script>
   </body>
