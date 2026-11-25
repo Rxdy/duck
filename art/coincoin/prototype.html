@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Coincoin fluo, versions</title>
+<style>
+:root{--bg:#eef0f2;--card:#fff;--line:#d5d9de;--ink:#17202a;--muted:#55606c;--accent:#0a8fb4}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161b;--card:#1b2128;--line:#2d3640;--ink:#e8edf1;--muted:#9eabb7;--accent:#3fd8ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12161b;--card:#1b2128;--line:#2d3640;--ink:#e8edf1;--muted:#9eabb7;--accent:#3fd8ff;color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font:15px/1.55 system-ui,sans-serif;padding-inline:16px}
+main{max-width:1080px;margin:auto;padding-block:24px 48px}
+h1{font-size:28px;margin:0}h2{font-size:17px;margin:0}p{margin:6px 0}.muted{color:var(--muted)}
+.bar{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0;align-items:center}.bar>span{font-weight:600;min-width:80px}
+button{font:inherit;font-weight:600;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+button[aria-pressed="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+button:focus-visible,canvas:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.dot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,360px),1fr));gap:14px}
+article{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+canvas{display:block;width:100%;aspect-ratio:4/3;background:#e2e2e2;cursor:grab;touch-action:pan-y}
+.txt{padding:10px 12px}.txt p{color:var(--muted);font-size:14px}
+.lvl{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--accent)}
+</style>
+<main>
+<h1>Coincoin fluo : les deux versions retenues</h1>
+<p class="muted">Sans texture ou avec grain. Les antennes clignotent, le déplacement glisse d’une case à l’autre. Glisse un canard pour les tourner.</p>
+<div class="bar" id="colors" role="group" aria-label="Couleur"><span>Couleur</span></div>
+<div class="bar"><span>Action</span><button id="walk" aria-pressed="false">Se déplacer</button><button id="spin" aria-pressed="false">Faire tourner</button><button id="iso">Vue Habbo</button></div>
+<div class="bar" id="seq"><span>Antennes</span></div>
+<p id="err" hidden>La 3D ne peut pas s’afficher dans ce navigateur (WebGL indisponible).</p>
+<div class="grid" id="grid"></div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const STYLES=[
+ ['lisse','Sans texture','1. Lisse','Couleurs franches, surfaces nettes.'],
+ ['mat','Avec grain','6. Mat texturé','Surface granuleuse, comme du plastique moulé ou de la gomme.']];
+// ordre du clignotement des antennes : à modifier ici
+const SEQ=[['Rose','#ff5fe0'],['Jaune','#ffe23a'],['Vert','#3fe06a'],['Bleu','#2f8cff']],BEAT=500;
+const COLORS=[['Bleu','#0fe7ff','#ff7feb'],['Rose','#ff7feb','#3fd86a'],['Jaune','#ffe23a','#3fbf7a'],['Vert','#4dff8a','#ffb43a']];
+const $=id=>document.getElementById(id),lin=h=>new THREE.Color(h).convertSRGBToLinear();
+const press=(box,i)=>[...box.querySelectorAll('button')].forEach((b,j)=>b.setAttribute('aria-pressed',i===j));
+let R;try{R=new THREE.WebGLRenderer({antialias:true});R.setSize(480,360,false)}catch(e){$('err').hidden=false}
+if(R){
+R.outputEncoding=THREE.sRGBEncoding;R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;
+function block(w,h,d,r,seg=3){const hw=w/2-r,hd=d/2-r,s=new THREE.Shape();s.moveTo(-hw,-hd);s.lineTo(hw,-hd);s.lineTo(hw,hd);s.lineTo(-hw,hd);s.lineTo(-hw,-hd);
+ const g=new THREE.ExtrudeGeometry(s,{depth:Math.max(h-2*r,.001),bevelEnabled:true,bevelSize:r,bevelThickness:r,bevelSegments:seg});g.rotateX(Math.PI/2);g.translate(0,h-r,0);g.computeVertexNormals();return g}
+const canvasTex=(n,draw)=>{const c=document.createElement('canvas');c.width=c.height=n;draw(c.getContext('2d'),n);const t=new THREE.CanvasTexture(c);t.wrapS=t.wrapT=THREE.RepeatWrapping;return t};
+const GT=canvasTex(128,(g,n)=>{const r=g.createRadialGradient(64,64,0,64,64,64);r.addColorStop(0,'rgba(255,255,255,.9)');r.addColorStop(.35,'rgba(255,255,255,.3)');r.addColorStop(1,'rgba(255,255,255,0)');g.fillStyle=r;g.fillRect(0,0,n,n)});
+const GRAIN=canvasTex(256,(g,n)=>{const d=g.createImageData(n,n);let s=9;for(let i=0;i<n*n;i++){s=(s*16807)%2147483647;const v=110+(s%100);d.data.set([v,v,v,255],i*4)}g.putImageData(d,0,0)});GRAIN.repeat.set(10,10);
+const ramp=(()=>{const t=new THREE.DataTexture(new Uint8Array([120,120,120,190,190,190,255,255,255]),3,1,THREE.RGBFormat);t.minFilter=t.magFilter=THREE.NearestFilter;t.needsUpdate=true;return t})();
+function mat(style,hex,glow=0){const c=lin(hex),e=c.clone().multiplyScalar(glow);
+ if(style==='cartoon'||style==='pixel')return new THREE.MeshToonMaterial({color:c,emissive:e,gradientMap:ramp});
+ if(style==='plastique')return new THREE.MeshPhongMaterial({color:c,emissive:e,shininess:120,specular:0x888888});
+ if(style==='mat')return new THREE.MeshStandardMaterial({color:c,emissive:e,roughness:.95,bumpMap:GRAIN,bumpScale:.035});
+ return new THREE.MeshLambertMaterial({color:c,emissive:e})}
+const ink=new THREE.MeshBasicMaterial({color:0x10151c,side:THREE.BackSide});
+function makeDuck(style){const duck=new THREE.Group(),rig=new THREE.Group();duck.add(rig);duck.rotation.y=Math.PI/2;
+ const refs={body:[],cap:[],capGlow:[],style};const outline=style==='cartoon'||style==='pixel';
+ function add(geo,m,x,y,z,ol=outline){const o=new THREE.Mesh(geo,m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;rig.add(o);
+  if(ol){geo.computeBoundingBox();const b=geo.boundingBox,sz=new THREE.Vector3(),c=new THREE.Vector3();b.getSize(sz);b.getCenter(c);const w=style==='pixel'?.028:.018;
+   const h=new THREE.Mesh(geo,ink),k=new THREE.Vector3(1+2*w/sz.x,1+2*w/sz.y,1+2*w/sz.z);h.scale.copy(k);h.position.set(x+c.x*(1-k.x),y+c.y*(1-k.y),z+c.z*(1-k.z));rig.add(h)}return o}
+ const bodyMat=style==='verre'?new THREE.MeshPhongMaterial({transparent:true,opacity:.55,shininess:90,specular:0xffffff,depthWrite:false}):mat(style,'#0fe7ff',.4);
+ refs.body.push(bodyMat);
+ add(block(.66,.1,.66,.05),mat(style,'#4f565e'),0,0,0);add(block(.6,.05,.6,.03),mat(style,'#3a4047'),0,.1,0);
+ add(block(.5,.42,.56,.09),bodyMat,0,.15,-.03);add(block(.46,.5,.36,.1),bodyMat,0,.5,.07);
+ if(style==='verre'){const core=new THREE.MeshBasicMaterial({color:0xffffff});refs.core=core;
+  add(block(.36,.3,.42,.08),core,0,.2,-.03,false);add(block(.32,.38,.22,.08),core,0,.56,.07,false)}
+ add(block(.56,.12,.32,.06),mat(style,'#fbc175'),0,.65,.32);add(block(.46,.07,.24,.035),mat(style,'#e19a4a'),0,.59,.3);
+ const B=c=>new THREE.MeshBasicMaterial({color:c}),eInk=B(0x14213d),wh=B(0xffffff),pup=B(0x2b3a6e);
+ for(const s of[1,-1]){add(new THREE.BoxGeometry(.13,.12,.02),eInk,s*.1,.84,.255,false);add(new THREE.BoxGeometry(.105,.095,.025),wh,s*.1,.84,.258,false);
+  add(new THREE.BoxGeometry(.045,.07,.03),pup,s*.085,.83,.262,false);
+  for(const k of[-1,0,1]){const l=add(new THREE.BoxGeometry(.015,.04,.015),eInk,s*(.1+k*.035),.915,.257,false);l.rotation.z=-s*k*.4}
+  add(new THREE.CylinderGeometry(.032,.032,.18,12),style==='verre'?mat('lisse','#0fe7ff',.4):bodyMat,s*.1,1.07,.07);
+  const cm=mat(style==='verre'?'plastique':style,'#ff7feb',.8);refs.cap.push(cm);add(block(.11,.1,.11,.045),cm,s*.1,1.14,.07);
+  const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:GT,blending:THREE.AdditiveBlending,depthWrite:false,transparent:true}));sp.scale.set(.32,.32,1);sp.position.set(s*.1,1.19,.07);rig.add(sp);refs.capGlow.push(sp)}
+ // halo discret : une légère lueur au sol et une petite lumière colorée
+ const fg=new THREE.Mesh(new THREE.PlaneGeometry(1.5,1.5),new THREE.MeshBasicMaterial({map:GT,blending:THREE.AdditiveBlending,depthWrite:false,transparent:true,opacity:.22}));fg.rotation.x=-Math.PI/2;fg.position.y=.005;duck.add(fg);refs.floor=fg;
+ const lamp=new THREE.PointLight(0x0fe7ff,.35,1.8);lamp.position.set(0,.6,.2);rig.add(lamp);refs.lamp=lamp;
+ refs.duck=duck;refs.rig=rig;return refs}
+function room(style){const sc=new THREE.Scene();sc.add(new THREE.HemisphereLight(0xffffff,0x9a9690,style==='cartoon'||style==='pixel'?.6:.75));
+ const sun=new THREE.DirectionalLight(0xffffff,.8);sun.position.set(-3,6,4);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);Object.assign(sun.shadow.camera,{left:-4,right:4,top:4,bottom:-4});sc.add(sun);
+ if(style==='plastique'){const k=new THREE.DirectionalLight(0xffffff,.5);k.position.set(4,3,2);sc.add(k)}
+ for(let x=-5;x<=5;x++)for(let z=-5;z<=5;z++){const t=new THREE.Mesh(new THREE.BoxGeometry(.98,.08,.98),new THREE.MeshLambertMaterial({color:lin((x+z)&1?'#bfbcb8':'#a6a3a0')}));t.position.set(x,-.04,z);t.receiveShadow=true;sc.add(t)}
+ return sc}
+const cards=STYLES.map(([k,lvl,name,text])=>{const a=document.createElement('article');a.innerHTML=`<canvas width="480" height="360" tabindex="0" role="img" aria-label="Coincoin fluo, ${name}. Flèches gauche et droite pour tourner."></canvas><div class="txt"><p class="lvl">${lvl}</p><h2>${name}</h2><p>${text}</p></div>`;$('grid').appendChild(a);
+ const sc=room(k),d=makeDuck(k);sc.add(d.duck);return{k,sc,d,cv:a.querySelector('canvas')}});
+let hue=COLORS[0];
+function recolor([,a,b]){hue=[null,a,b];for(const{d}of cards){for(const m of d.body){m.color.copy(lin(a));if(d.style!=='verre')m.emissive.copy(lin(a).multiplyScalar(.4))}
+ if(d.core)d.core.color.copy(lin(a)).lerp(new THREE.Color(1,1,1),.35);d.floor.material.color.copy(lin(a));d.lamp.color.copy(lin(a));
+}}
+const cam=new THREE.OrthographicCamera(-1,1,1,-1,.1,50);let yaw=0,walking=false,spin=false,t0=0;
+const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const path=[[0,0],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[0,0]];
+function frame(now){
+ // les antennes clignotent en passant par les 4 couleurs, toujours dans l'ordre de SEQ, toujours allumées
+ const beat=Math.floor(now/BEAT),idx=beat%SEQ.length,on=1,capCol=lin(SEQ[idx][1]);
+ for(const{d}of cards){for(const m of d.cap){m.color.copy(capCol).multiplyScalar(.35+.65*on);m.emissive.copy(capCol).multiplyScalar(.8*on)}for(const g of d.capGlow){g.material.color.copy(capCol);g.material.opacity=on*.8}}
+ [...$('seq').querySelectorAll('b')].forEach((el,i)=>el.style.outline=i===idx?'2px solid var(--ink)':'none');
+ let pos=[0,0],ry=Math.PI/2;
+ if(walking){
+  // une case par étape, comme une transition CSS ease-in-out : ça démarre doucement, glisse, puis se pose
+  const STEP=520,k=(Math.max(0,now-t0)/STEP)%(path.length-1),i=Math.floor(k),f=k-i,[ax,az]=path[i],[bx,bz]=path[i+1];
+  const e=f<.5?4*f*f*f:1-Math.pow(-2*f+2,3)/2;pos=[ax+(bx-ax)*e,az+(bz-az)*e];
+  // le bec tourne en douceur vers la nouvelle direction pendant le premier tiers de l'étape
+  const [px,pz]=i>0?path[i-1]:[ax-(bx-ax),az-(bz-az)],from=Math.atan2(ax-px,az-pz),to=Math.atan2(bx-ax,bz-az);
+  let d=to-from;d=Math.atan2(Math.sin(d),Math.cos(d));const t=Math.min(1,f*3),te=t*t*(3-2*t);ry=from+d*te}
+ if(spin)yaw+=.008;
+ cam.left=-1.75*4/3;cam.right=1.75*4/3;cam.top=1.75;cam.bottom=-1.75;cam.position.set(6*Math.sin(Math.PI/4+yaw),4.9,6*Math.cos(Math.PI/4+yaw));cam.lookAt(0,.3,0);cam.updateProjectionMatrix();
+ for(const c of cards){c.d.duck.position.set(pos[0],0,pos[1]);c.d.duck.rotation.y=ry;
+  const px=c.k==='pixel';R.setSize(px?160:480,px?120:360,false);R.render(c.sc,cam);const g=c.cv.getContext('2d');g.imageSmoothingEnabled=!px;g.drawImage(R.domElement,0,0,480,360)}
+ requestAnimationFrame(frame)}
+for(const c of cards){let x=null;const cv=c.cv;cv.onpointerdown=e=>{x=e.clientX;cv.setPointerCapture(e.pointerId)};cv.onpointerup=cv.onpointercancel=()=>x=null;
+ cv.onpointermove=e=>{if(x!==null){yaw-=(e.clientX-x)*.012;x=e.clientX}};cv.onkeydown=e=>{const d={ArrowLeft:.25,ArrowRight:-.25}[e.key];if(d){e.preventDefault();yaw+=d}}}
+$('walk').onclick=e=>{walking=!walking;e.target.setAttribute('aria-pressed',walking);t0=performance.now()};
+$('spin').onclick=e=>{spin=!spin;e.target.setAttribute('aria-pressed',spin)};$('iso').onclick=()=>{yaw=0};
+COLORS.forEach((col,i)=>{const bt=document.createElement('button');bt.innerHTML=`<span class="dot" style="background:${col[1]}"></span>${col[0]}`;bt.onclick=()=>{recolor(col);press($('colors'),i)};$('colors').appendChild(bt)});
+SEQ.forEach(([n,c],i)=>{const el=document.createElement('b');el.style.cssText='padding:3px 10px;border-radius:6px';el.innerHTML=`<span class="dot" style="background:${c}"></span>${i+1}. ${n}`;$('seq').appendChild(el)});
+press($('colors'),0);recolor(COLORS[0]);requestAnimationFrame(frame);
+}
+</script>

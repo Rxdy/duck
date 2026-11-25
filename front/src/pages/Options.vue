@@ -2,7 +2,7 @@
 import { ref } from "vue";
 import type { Direction } from "../types.js";
 import { labelForKeyCode } from "../lib/keyboard.js";
-import type { Theme } from "../lib/settings.js";
+import type { DuckFinishSetting, Theme } from "../lib/settings.js";
 import { useSettingsStore } from "../store/settingsStore.js";
 import { useDeviceType } from "../composables/useDeviceType.js";
 
@@ -14,6 +14,11 @@ const hapticsSupported = typeof navigator !== "undefined" && "vibrate" in naviga
 const THEMES: { value: Theme; label: string; icon: string }[] = [
   { value: "dark", label: "Sombre", icon: "ri-moon-line" },
   { value: "light", label: "Clair", icon: "ri-sun-line" },
+];
+
+const FINISHES: { value: DuckFinishSetting; label: string }[] = [
+  { value: "lisse", label: "Lisse" },
+  { value: "mat", label: "Mat" },
 ];
 
 const DIRECTION_LABELS: { direction: Direction; label: string }[] = [
@@ -148,6 +153,27 @@ function captureKey(event: KeyboardEvent) {
             @click="settings.setTheme(option.value)"
           >
             <i :class="option.icon" aria-hidden="true" />
+            {{ option.label }}
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between gap-3 text-sm">
+        <span class="text-ink/60">Canard</span>
+        <div class="flex overflow-hidden rounded-lg border border-ink/10">
+          <button
+            v-for="option in FINISHES"
+            :key="option.value"
+            type="button"
+            class="px-3 py-1.5 text-xs font-semibold transition"
+            :class="
+              settings.duckFinish === option.value
+                ? 'bg-cyan-500 text-slate-950'
+                : 'bg-surface text-ink/60'
+            "
+            :aria-pressed="settings.duckFinish === option.value"
+            @click="settings.setDuckFinish(option.value)"
+          >
             {{ option.label }}
           </button>
         </div>

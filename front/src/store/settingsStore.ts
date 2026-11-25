@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import type { Direction } from "../types.js";
 import {
   DEFAULT_KEY_BINDINGS,
+  type DuckFinishSetting,
   loadSettings,
   persistSettings,
   type Settings,
@@ -47,6 +48,10 @@ export const useSettingsStore = defineStore("settings", {
     },
     setColorblindMode(value: boolean) {
       this.colorblindMode = value;
+      this.persist();
+    },
+    setDuckFinish(value: DuckFinishSetting) {
+      this.duckFinish = value;
       this.persist();
     },
     setTheme(value: Theme) {

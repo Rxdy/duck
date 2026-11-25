@@ -19,6 +19,9 @@ La 3D est tout à fait envisageable sans rendre le projet complexe, à condition
 - les obstacles, bonus et effets (particules lors d'un point, etc.)
 - des animations fluides : rotation du canard, petit rebond lors du déplacement...
 
+> Depuis le 25/11/2026, le plateau affiche un canard en 3D (voir [notes](10-audit-graphismes.md)) à la place
+> du sprite décrit ci-dessous.
+
 ## Le personnage : un sprite, pas un modèle 3D
 
 Le plateau (cases, murs, relief) est bien en 3D, mais le canard lui-même est une **image plate qui

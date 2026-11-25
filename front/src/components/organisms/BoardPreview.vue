@@ -8,15 +8,13 @@ import {
   buildBoardMeshes,
   computeIsometricFrame,
   computeTopDownFrame,
-  directionFacing,
   isWebglAvailable,
   SUN_POSITION,
   TILE_SIZE,
-  type Facing,
   type TerritoryBase,
 } from "../../lib/board.js";
 import type { TileKind } from "../../lib/mapEditor.js";
-import DuckSprite from "./DuckSprite.vue";
+import CoincoinDuck from "./CoincoinDuck.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -28,8 +26,7 @@ const props = withDefaults(
       y: number;
       color: string;
       // Accessoire cosmétique équipé (voir lib/duckAccessories.ts). Pas encore
-      // dessiné sur le canard : les sprites (voir DuckSprite.vue) n'en ont pas
-      // de version, il faudra une image d'accessoire par direction.
+      // dessiné sur le canard (voir lib/coincoin.ts).
       accessory?: string;
       // Millisecondes d'intouchabilité restantes (voir back/src/game-engine/
       // game.ts) : fait clignoter le canard concerné.
@@ -61,10 +58,6 @@ const emit = defineEmits<{ tileClick: [x: number, y: number] }>();
 const settings = useSettingsStore();
 const boardTheme = computed(() => settings.theme);
 
-// Hauteur du sprite du canard (voir DuckSprite.vue), un peu plus d'une case :
-// en dessous, le personnage se lit comme un simple pion posé sur le plateau.
-const DUCK_HEIGHT = 1.05;
-
 const territoryBases = computed<TerritoryBase[]>(
   () =>
     props.players
@@ -86,32 +79,6 @@ const renderTiles = computed(() =>
     theme: boardTheme.value,
     bases: territoryBases.value,
   }),
-);
-
-// Direction actuellement affichée par chaque canard (voir DuckSprite.vue) :
-// comparée à la position précédente à chaque mise à jour, pour ne changer
-// de pose que sur un vrai déplacement et garder la dernière direction le
-// reste du temps (immobile ne doit pas remettre le canard face "bas" par
-// défaut).
-const facingByPlayerId = ref(new Map<string, Facing>());
-const lastPositionByPlayerId = new Map<string, { x: number; y: number }>();
-watch(
-  () => props.players,
-  (players) => {
-    for (const p of players ?? []) {
-      const last = lastPositionByPlayerId.get(p.id);
-      if (!last) {
-        // Premier affichage : "se" par défaut, une pose de face plutôt que de
-        // dos — on veut voir le canard au moment où il apparaît.
-        facingByPlayerId.value.set(p.id, "se");
-      } else if (last.x !== p.x || last.y !== p.y) {
-        const facing = directionFacing(p.x - last.x, p.y - last.y);
-        if (facing) facingByPlayerId.value.set(p.id, facing);
-      }
-      lastPositionByPlayerId.set(p.id, { x: p.x, y: p.y });
-    }
-  },
-  { deep: true, immediate: true },
 );
 
 // Certains navigateurs/webviews ne peuvent créer aucun contexte WebGL : on le
@@ -231,18 +198,14 @@ function handleClick(event: MouseEvent) {
         <TresMeshStandardMaterial :color="tile.color" />
       </TresMesh>
 
-      <TresGroup
+      <CoincoinDuck
         v-for="player in props.players ?? []"
         :key="player.id"
-        :position="[player.x + 0.5, DUCK_HEIGHT / 2, player.y + 0.5]"
-      >
-        <DuckSprite
-          :color="player.color"
-          :size="DUCK_HEIGHT"
-          :facing="facingByPlayerId.get(player.id) ?? 'se'"
-          :immune-for-ms="player.immuneForMs ?? 0"
-        />
-      </TresGroup>
+        :x="player.x"
+        :y="player.y"
+        :color="player.color"
+        :immune-for-ms="player.immuneForMs ?? 0"
+      />
     </TresCanvas>
 
     <div v-else class="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">

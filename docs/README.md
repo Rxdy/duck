@@ -17,6 +17,7 @@ Ce dossier découpe le cahier des charges initial (voir [`../resultat.md`](../re
 7. [Multiplateforme & DevOps](07-devops-multiplateforme.md) — responsive, CI/CD, Docker
 8. [Roadmap](08-roadmap.md) — versions 0.1 → 1.0
 9. [Idées futures](09-idees-futures.md) — replay, bots, clans, workshop, événements...
+10. [Audit technique et pistes graphiques](10-audit-graphismes.md) — modes tactique et graphique, 3D, points à corriger
 
 ## Statut
 

@@ -5,6 +5,9 @@ export type KeyBindings = Record<Direction, string>;
 /** Thème de l'interface (voir src/style.css pour les deux palettes). */
 export type Theme = "dark" | "light";
 
+/** Matière du canard (voir lib/coincoin.ts). */
+export type DuckFinishSetting = "lisse" | "mat";
+
 export interface Settings {
   musicVolume: number;
   sfxVolume: number;
@@ -13,6 +16,7 @@ export interface Settings {
   reducedMotion: boolean;
   colorblindMode: boolean;
   theme: Theme;
+  duckFinish: DuckFinishSetting;
 }
 
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
@@ -32,6 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
   // Sombre par défaut : c'est ce que voit un nouveau venu avant même que ses
   // réglages soient lus, et le jeu a été dessiné comme ça.
   theme: "dark",
+  duckFinish: "lisse",
 };
 
 function clampVolume(value: unknown, fallback: number): number {
@@ -73,6 +78,10 @@ export function parseSettings(raw: unknown): Settings {
     colorblindMode:
       typeof r.colorblindMode === "boolean" ? r.colorblindMode : DEFAULT_SETTINGS.colorblindMode,
     theme: r.theme === "light" || r.theme === "dark" ? r.theme : DEFAULT_SETTINGS.theme,
+    duckFinish:
+      r.duckFinish === "lisse" || r.duckFinish === "mat"
+        ? r.duckFinish
+        : DEFAULT_SETTINGS.duckFinish,
   };
 }
 

@@ -11,7 +11,7 @@ export interface Vector2 {
  * l'ordre d'arrivée dans la partie. Volontairement différente des palettes
  * par défaut Google/Microsoft (bleu/rouge/jaune/vert).
  */
-export const PLAYER_COLORS = ["#FF4D6D", "#00C2D1", "#FFB100", "#9B5DE5"] as const;
+export const PLAYER_COLORS = ["#FF4D6D", "#00C2D1", "#FFB100", "#3FC46B"] as const;
 
 /**
  * Les trois modes de la V1 (voir docs/02-gameplay.md#modes-de-jeu). La valeur
