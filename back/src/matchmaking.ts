@@ -21,6 +21,9 @@ interface PendingRoom {
   fill: () => Promise<void>;
 }
 
+/** Décompte 3-2-1 affiché au départ (voir front/src/lib/countdown.ts). */
+export const COUNTDOWN_MS = 3000;
+
 /**
  * Réunit dans une même salle les joueurs qui cherchent une partie dans le
  * même mode.
@@ -118,7 +121,7 @@ export class Matchmaker {
         console.error("Échec du remplissage de la salle :", error);
       })
       .finally(() => {
-        pending.room.start();
+        pending.room.start(COUNTDOWN_MS);
       });
   }
 }

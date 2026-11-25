@@ -61,6 +61,9 @@ export class GameRoom {
   // l'attente (voir protocol.ts#WaitingMessage). Absente en entraînement, qui
   // part immédiatement.
   private waitingUntil?: number;
+  // Fin du décompte 3-2-1 : avant cet instant, aucun coup n'est accepté, ni des
+  // joueurs ni des bots.
+  private playableAt = 0;
   // Identifiant anonyme par joueur (voir front/src/lib/anonId.ts), séparé du
   // Player du moteur de jeu : il ne doit jamais être diffusé aux autres
   // joueurs via broadcastState, seulement utilisé pour enregistrer la partie.
@@ -163,11 +166,20 @@ export class GameRoom {
    * fin du délai part immédiatement, et le délai qui expire ensuite ne doit
    * pas remettre son chrono à zéro en pleine partie.
    */
-  start(): void {
+  start(countdownMs = 0): void {
     if (!this.waiting) return;
     this.waiting = false;
     this.waitingUntil = undefined;
-    this.startedAt = Date.now();
+    this.startCountdown(countdownMs);
+  }
+
+  /**
+   * Montre le plateau et retient tout le monde `countdownMs` : chacun a le temps
+   * de repérer la carte et son canard. Le chrono de la partie part à la fin.
+   */
+  startCountdown(countdownMs: number): void {
+    this.playableAt = Date.now() + countdownMs;
+    this.startedAt = this.playableAt;
     this.broadcastState();
   }
 
@@ -231,6 +243,7 @@ export class GameRoom {
   handle(playerId: string, message: ClientMessage): void {
     if (this.waiting) return; // partie pas encore partie : on attend encore des joueurs
     if (this.ended) return; // partie déjà terminée : plus aucun coup n'est accepté
+    if (Date.now() < this.playableAt) return; // décompte en cours
 
     if (message.type === "MOVE") {
       const now = Date.now();
@@ -352,7 +365,7 @@ export class GameRoom {
           // du serveur, même raison que PlayerState#immuneForMs.
           startsInMs: Math.max(0, (this.waitingUntil ?? now) - now),
         }
-      : { type: "STATE", players };
+      : { type: "STATE", players, countdownMs: Math.max(0, this.playableAt - now) };
     const payload = JSON.stringify(message);
     for (const socket of this.sockets.values()) {
       socket.send(payload);

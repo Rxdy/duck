@@ -1,29 +1,12 @@
-import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
-import { eq, or } from "drizzle-orm";
+import { randomBytes, randomInt, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { eq, or, sql } from "drizzle-orm";
 import { db } from "./db.js";
 import { accounts, sessions } from "./schema.js";
+import { passwordEntropy, REQUIRED_BITS } from "./passwordStrength.js";
 import { grantStarterSkins } from "./skins.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_PATTERN = /^[a-zA-Z0-9_-]{3,20}$/;
-/**
- * Socle du mot de passe. Volontairement REDONDANT avec la jauge de
- * l'inscription (front/src/lib/passwordStrength.ts) : la jauge guide, elle ne
- * protège pas — n'importe qui peut poster directement sur /register sans
- * passer par le formulaire.
- *
- * La note d'entropie, elle, reste côté client : c'est une aide au choix, pas
- * une frontière de sécurité, et la dupliquer ici imposerait de maintenir deux
- * copies du même calcul (front/ et back/ ne partagent pas de code, voir
- * docs/06-architecture-technique.md).
- */
-const MIN_PASSWORD_LENGTH = 10;
-const PASSWORD_CLASSES = [
-  { pattern: /[a-z]/, label: "une minuscule" },
-  { pattern: /[A-Z]/, label: "une majuscule" },
-  { pattern: /[0-9]/, label: "un chiffre" },
-  { pattern: /[^a-zA-Z0-9]/, label: "un caractère spécial" },
-];
 const SCRYPT_KEY_LENGTH = 64;
 
 /**
@@ -57,19 +40,21 @@ export function validateCredentials(
     return "Le pseudo doit faire 3 à 20 caractères (lettres, chiffres, - ou _).";
   }
   if (!EMAIL_PATTERN.test(email)) return "Adresse email invalide.";
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    return `Le mot de passe doit faire au moins ${MIN_PASSWORD_LENGTH} caractères.`;
-  }
-  // Tout ce qui manque, d'un coup : renvoyer la première erreur venue ferait
-  // recommencer le joueur autant de fois qu'il lui manque de familles.
-  const missing = PASSWORD_CLASSES.filter((c) => !c.pattern.test(password)).map((c) => c.label);
-  if (missing.length > 0) {
-    return `Le mot de passe doit contenir au moins ${missing.join(", ")}.`;
+  if (passwordEntropy(password) < REQUIRED_BITS) {
+    return "Mot de passe pas assez sûr : rallonge-le, ou mêle majuscules, chiffres et symboles.";
   }
   return undefined;
 }
 
-export class UsernameOrEmailAlreadyUsedError extends Error {}
+export class UsernameOrEmailAlreadyUsedError extends Error {
+  constructor(readonly field?: "username" | "email") {
+    super("pseudo ou email déjà utilisé");
+  }
+}
+
+/** Comparaison sans tenir compte de la casse : « Rudy » et « rudy » sont le même pseudo. */
+const sameText = (column: typeof accounts.username | typeof accounts.email, value: string) =>
+  sql`lower(${column}) = ${value.toLowerCase()}`;
 
 /**
  * Code SQLSTATE d'une violation de contrainte d'unicité sous PostgreSQL.
@@ -127,9 +112,21 @@ export async function registerAccount(
   // Pas de `select` de vérification avant l'insertion : seule la contrainte
   // d'unicité de la base tranche sans fenêtre de course (voir
   // UNIQUE_VIOLATION). C'est aussi un aller-retour de moins.
+  // Vérification préalable pour dire LEQUEL est pris. Les index uniques de la
+  // base (db/init/13-unique-sans-casse.sql) tranchent les inscriptions simultanées.
+  const address = email.toLowerCase();
+  const taken = await db
+    .select({ username: accounts.username, email: accounts.email })
+    .from(accounts)
+    .where(or(sameText(accounts.username, username), sameText(accounts.email, address)));
+  if (taken.length > 0) {
+    const nameTaken = taken.some((a) => a.username.toLowerCase() === username.toLowerCase());
+    throw new UsernameOrEmailAlreadyUsedError(nameTaken ? "username" : "email");
+  }
+
   const values = {
     username,
-    email,
+    email: address,
     passwordHash: hashPassword(password),
     anonId: anonId ?? null,
   };
@@ -152,13 +149,15 @@ export async function registerAccount(
         .values({ ...values, anonId: null })
         .returning();
     } else {
-      throw new UsernameOrEmailAlreadyUsedError();
+      throw new UsernameOrEmailAlreadyUsedError(
+        constraint.includes("email") ? "email" : "username",
+      );
     }
   }
 
   await grantStarterSkins(account!.id);
 
-  return createSession(account!.id, username, email);
+  return createSession(account!.id, username, address);
 }
 
 /**
@@ -171,13 +170,93 @@ export async function loginAccount(
   identifier: string,
   password: string,
 ): Promise<AuthResult | undefined> {
-  const [account] = await db
+  const matches = await db
     .select()
     .from(accounts)
-    .where(or(eq(accounts.email, identifier), eq(accounts.username, identifier)));
-  if (!account || !verifyPassword(password, account.passwordHash)) return undefined;
+    .where(or(sameText(accounts.email, identifier), sameText(accounts.username, identifier)));
+  // Plusieurs lignes ne sont possibles qu'avec d'anciens comptes ne différant que par la casse.
+  const account = matches.find(
+    (a) => a.passwordHash !== null && verifyPassword(password, a.passwordHash),
+  );
+  if (!account) return undefined;
 
   return createSession(account.id, account.username, account.email);
+}
+
+/** Ce que Google atteste sur la personne, une fois son jeton vérifié (voir google.ts). */
+export interface GoogleProfile {
+  sub: string;
+  email: string;
+  name: string;
+}
+
+/** Un pseudo valide tiré du nom Google. Jamais de l'email, que le classement rendrait public. */
+export function usernameFromName(name: string): string {
+  const cleaned = name
+    .normalize("NFD")
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 15);
+  return cleaned.length >= 3 ? cleaned : "Canard";
+}
+
+/**
+ * Connexion avec Google : retrouve le compte, le rattache, ou le crée.
+ *
+ * Rattachement par email : l'inscription par mot de passe ne vérifie PAS
+ * l'adresse, n'importe qui a donc pu créer un compte avec l'email d'un autre.
+ * Google, lui, prouve à qui elle appartient. Au rattachement, l'ancien mot de
+ * passe et les sessions ouvertes sont donc effacés : sans ça, celui qui avait
+ * créé le compte garderait l'accès à côté de son vrai propriétaire.
+ */
+export async function loginWithGoogle(
+  profile: GoogleProfile,
+  anonId?: string,
+): Promise<AuthResult> {
+  const [known] = await db.select().from(accounts).where(eq(accounts.googleSub, profile.sub));
+  if (known) return createSession(known.id, known.username, known.email);
+
+  const [sameEmail] = await db
+    .select()
+    .from(accounts)
+    .where(sameText(accounts.email, profile.email));
+  if (sameEmail) {
+    await db
+      .update(accounts)
+      .set({ googleSub: profile.sub, passwordHash: null })
+      .where(eq(accounts.id, sameEmail.id));
+    await db.delete(sessions).where(eq(sessions.accountId, sameEmail.id));
+    return createSession(sameEmail.id, sameEmail.username, sameEmail.email);
+  }
+
+  const base = usernameFromName(profile.name);
+  let username = base;
+  let claimedAnonId = anonId ?? null;
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const [clash] = await db.select().from(accounts).where(sameText(accounts.username, username));
+    if (clash) {
+      username = `${base}${randomInt(1000, 10000)}`;
+      continue;
+    }
+    try {
+      const [created] = await db
+        .insert(accounts)
+        .values({
+          username,
+          email: profile.email.toLowerCase(),
+          googleSub: profile.sub,
+          anonId: claimedAnonId,
+        })
+        .returning();
+      await grantStarterSkins(created!.id);
+      return createSession(created!.id, username, profile.email);
+    } catch (error) {
+      const constraint = violatedConstraint(error);
+      if (constraint === undefined) throw error;
+      if (constraint === ANON_ID_CONSTRAINT) claimedAnonId = null;
+      else username = `${base}${randomInt(1000, 10000)}`;
+    }
+  }
+  throw new UsernameOrEmailAlreadyUsedError();
 }
 
 /** Résout le compte propriétaire d'un token de session, `undefined` s'il est invalide/expiré. */

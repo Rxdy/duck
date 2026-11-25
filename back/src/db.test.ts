@@ -127,12 +127,12 @@ describe("listMatchesFor", () => {
 
   it("renvoie le mode, la durée et l'heure de chaque partie", async () => {
     const anonId = `anon-recap-${randomUUID()}`;
-    const mapName = await record(anonId, "recap", { mode: "ffa3", durationMs: 92_000 });
+    const mapName = await record(anonId, "recap", { mode: "ffa4", durationMs: 92_000 });
 
     const [recap] = await listMatchesFor(anonId);
 
     expect(recap!.mapName).toBe(mapName);
-    expect(recap!.mode).toBe("ffa3");
+    expect(recap!.mode).toBe("ffa4");
     expect(recap!.durationMs).toBe(92_000);
     expect(Number.isNaN(Date.parse(recap!.playedAt))).toBe(false);
   });

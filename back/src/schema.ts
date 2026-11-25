@@ -33,7 +33,9 @@ export const accounts = pgTable("accounts", {
   id: uuid("id").primaryKey().defaultRandom(),
   username: text("username").notNull().unique(),
   email: text("email").notNull().unique(),
-  passwordHash: text("password_hash").notNull(),
+  // NULL pour un compte qui ne se connecte qu'avec Google.
+  passwordHash: text("password_hash"),
+  googleSub: text("google_sub"),
   anonId: text("anon_id"),
   // Classement Elo (voir back/src/rating.ts), mis à jour à chaque fin de
   // partie. Démarre à zéro (db/init/08-starting-rating.sql) : un nouveau

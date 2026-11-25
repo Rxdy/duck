@@ -5,6 +5,8 @@ import { db } from "./db.js";
 import {
   getAccountIdForToken,
   loginAccount,
+  loginWithGoogle,
+  usernameFromName,
   registerAccount,
   UsernameOrEmailAlreadyUsedError,
   validateCredentials,
@@ -45,22 +47,13 @@ describe("validateCredentials", () => {
     expect(validateCredentials("alice", "not-an-email", "Hunter22!x")).toBeDefined();
   });
 
-  it("rejects a password shorter than 10 characters", () => {
-    expect(validateCredentials("alice", "alice@example.com", "Short1!")).toBeDefined();
-  });
+  it("juge le mot de passe sur ses bits, sans longueur ni familles imposées", () => {
+    const check = (password: string) => validateCredentials("alice", "alice@example.com", password);
 
-  it("exige les quatre familles de caractères, et dit lesquelles manquent", () => {
-    // Cette règle est volontairement redoublée côté serveur : la jauge du
-    // formulaire guide, elle ne protège pas — on peut poster sans elle.
-    const sansMajuscule = validateCredentials("alice", "alice@example.com", "canardjaune7!");
-    expect(sansMajuscule).toContain("une majuscule");
-
-    // Tout ce qui manque d'un coup, sinon le joueur recommence une fois par
-    // famille absente.
-    const presqueRien = validateCredentials("alice", "alice@example.com", "canardjaune");
-    expect(presqueRien).toContain("une majuscule");
-    expect(presqueRien).toContain("un chiffre");
-    expect(presqueRien).toContain("un caractère spécial");
+    expect(check("Short1!")).toContain("pas assez sûr");
+    expect(check("Aaaaaaaaa1!")).toContain("pas assez sûr");
+    expect(check("truiteverteaubordduzinc")).toBeUndefined();
+    expect(check("Hunter22!x")).toBeUndefined();
   });
 });
 
@@ -215,5 +208,53 @@ describe("registerAccount / loginAccount", () => {
   it("refuses login for an unknown identifier", async () => {
     expect(await loginAccount("nobody@example.com", "whatever1")).toBeUndefined();
     expect(await loginAccount("nobody-at-all", "whatever1")).toBeUndefined();
+  });
+});
+
+describe("connexion avec Google", () => {
+  it("tire un pseudo valide du nom", () => {
+    expect(usernameFromName("Zoé Dupont")).toBe("ZoeDupont");
+    expect(usernameFromName("李")).toBe("Canard");
+  });
+
+  it("crée le compte une fois, puis le retrouve", async () => {
+    const { email } = unique();
+    createdEmails.push(email);
+    const profile = { sub: `sub-${email}`, email, name: `G${Date.now()}` };
+
+    const first = await loginWithGoogle(profile);
+    const second = await loginWithGoogle(profile);
+
+    expect(second.username).toBe(first.username);
+    await expect(loginAccount(email, "")).resolves.toBeUndefined();
+  });
+
+  it("au rattachement, retire l'ancien mot de passe et les sessions", async () => {
+    const { username, email } = unique();
+    createdEmails.push(email);
+    const before = await registerAccount(username, email, "Hunter22!x");
+
+    const linked = await loginWithGoogle({ sub: `sub-${email}`, email, name: "Autre" });
+
+    expect(linked.username).toBe(username);
+    await expect(loginAccount(email, "Hunter22!x")).resolves.toBeUndefined();
+    await expect(getAccountIdForToken(before.token)).resolves.toBeUndefined();
+    await expect(getAccountIdForToken(linked.token)).resolves.toBeDefined();
+  });
+});
+
+describe("unicité sans tenir compte de la casse", () => {
+  it("refuse le même pseudo ou le même email écrit autrement, et dit lequel", async () => {
+    const { username, email } = unique();
+    createdEmails.push(email);
+    await registerAccount(username, email, "Hunter22!x");
+
+    await expect(
+      registerAccount(username.toUpperCase(), unique().email, "Hunter22!x"),
+    ).rejects.toMatchObject({ field: "username" });
+    await expect(
+      registerAccount(unique().username, email.toUpperCase(), "Hunter22!x"),
+    ).rejects.toMatchObject({ field: "email" });
+    await expect(loginAccount(email.toUpperCase(), "Hunter22!x")).resolves.toBeDefined();
   });
 });

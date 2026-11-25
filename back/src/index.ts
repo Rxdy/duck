@@ -24,7 +24,9 @@ import {
   registerAccount,
   UsernameOrEmailAlreadyUsedError,
   validateCredentials,
+  loginWithGoogle,
 } from "./auth.js";
+import { verifyGoogleCredential } from "./google.js";
 import { equipSkin, getEquippedAccessory, listOwnedSkins } from "./skins.js";
 import { deleteMapForAccount, listMapsForAccount, saveMapForAccount } from "./maps.js";
 import {
@@ -36,7 +38,7 @@ import {
 import { ensureBotPopulation, pickBotOpponents } from "./botAccounts.js";
 import { DEFAULT_GAME_MODE, isGameMode, playerCountFor, type GameMode } from "./shared.js";
 import { BOT_LEVELS, DEFAULT_BOT_LEVEL, isBotLevel, type BotLevel } from "./bots.js";
-import { Matchmaker } from "./matchmaking.js";
+import { COUNTDOWN_MS, Matchmaker } from "./matchmaking.js";
 
 const PORT = Number(process.env.PORT ?? 8080);
 
@@ -70,6 +72,8 @@ function bearerToken(req: IncomingMessage): string | undefined {
 }
 
 const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
+// Non défini : la connexion avec Google est désactivée, le front masque son bouton.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || undefined;
 
 const httpServer = createServer((req, res) => {
   // CORS : seules les origines autorisées (ALLOWED_ORIGINS, voir origins.ts) peuvent appeler l'API depuis un
@@ -210,6 +214,51 @@ const httpServer = createServer((req, res) => {
     return;
   }
 
+  // L'identifiant client est public. Le front le demande ici plutôt que de le
+  // figer au build : la même image sert ainsi tous les environnements.
+  if (req.url === "/auth/config" && req.method === "GET") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ googleClientId: GOOGLE_CLIENT_ID ?? null }));
+    return;
+  }
+
+  if (req.url === "/auth/google" && req.method === "POST") {
+    readJsonBody(req).then(
+      async (payload) => {
+        const { credential, anonId } = payload as { credential?: unknown; anonId?: unknown };
+        if (!GOOGLE_CLIENT_ID || typeof credential !== "string") {
+          res.writeHead(400);
+          res.end();
+          return;
+        }
+
+        try {
+          const profile = await verifyGoogleCredential(credential, GOOGLE_CLIENT_ID);
+          if (!profile) {
+            res.writeHead(401, { "content-type": "application/json" });
+            res.end(JSON.stringify({ error: "Connexion Google refusée." }));
+            return;
+          }
+          const result = await loginWithGoogle(
+            profile,
+            typeof anonId === "string" ? anonId : undefined,
+          );
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify(result));
+        } catch (error) {
+          console.error("Échec de la connexion Google :", error);
+          res.writeHead(500);
+          res.end();
+        }
+      },
+      () => {
+        res.writeHead(400);
+        res.end();
+      },
+    );
+    return;
+  }
+
   if (req.url === "/auth/register" && req.method === "POST") {
     readJsonBody(req).then(
       async (payload) => {
@@ -248,9 +297,13 @@ const httpServer = createServer((req, res) => {
         } catch (error) {
           if (error instanceof UsernameOrEmailAlreadyUsedError) {
             res.writeHead(409, { "content-type": "application/json" });
-            res.end(
-              JSON.stringify({ error: "Ce pseudo ou cette adresse email est déjà utilisé." }),
-            );
+            const message =
+              error.field === "email"
+                ? "Cette adresse email a déjà un compte."
+                : error.field === "username"
+                  ? "Ce pseudo est déjà pris."
+                  : "Ce pseudo ou cette adresse email est déjà utilisé.";
+            res.end(JSON.stringify({ error: message }));
             return;
           }
           console.error("Échec de l'inscription :", error);
@@ -560,7 +613,7 @@ wss.on("connection", (socket: WebSocket) => {
             currentRoomId = open.id;
             currentMode = mode;
             open.join(playerId, message.name, socket, message.anonId, accessory);
-            socket.send(JSON.stringify(open.getMapMessage()));
+            socket.send(JSON.stringify({ ...open.getMapMessage(), you: playerId }));
             // Cette arrivée a peut-être complété la salle : elle part alors
             // sans attendre la fin du délai.
             matchmaker.settle(mode);
@@ -616,7 +669,7 @@ wss.on("connection", (socket: WebSocket) => {
           // départ — un compte à rebours qui commence à un chiffre inconnu.
           matchmaker.hold(mode, room, () => fillWithBots(room, playerRating, botLevel));
           room.join(playerId, message.name, socket, message.anonId, accessory);
-          socket.send(JSON.stringify(room.getMapMessage()));
+          socket.send(JSON.stringify({ ...room.getMapMessage(), you: playerId }));
           // Un mode à une seule place partirait immédiatement : il n'y a
           // personne à attendre. Aucun mode n'est dans ce cas aujourd'hui
           // (voir shared.ts#GAME_MODES), mais la salle ne doit pas dépendre de
@@ -642,6 +695,7 @@ wss.on("connection", (socket: WebSocket) => {
       for (let i = 1; i < spawns.length; i++) {
         currentRoom.addBot(randomUUID(), `Bot ${i}`);
       }
+      currentRoom.startCountdown(COUNTDOWN_MS);
       // Pas de mise en attente : l'entraînement se joue seul contre des bots,
       // sur sa propre carte, et n'est jamais partagé. Il n'a personne à
       // attendre, donc il joue dès maintenant (voir room.ts#openForWaiting).

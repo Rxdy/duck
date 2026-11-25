@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import type { WebSocket } from "ws";
 import { Tile, type GameMap } from "./game-engine/index.js";
 import { generateMap } from "./map-generator/index.js";
@@ -578,5 +578,26 @@ describe("GameRoom", () => {
         vi.useRealTimers();
       }
     });
+  });
+});
+
+describe("décompte de départ", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("refuse tout coup avant la fin, puis les accepte", () => {
+    vi.useFakeTimers();
+    const map: GameMap = { width: 2, height: 1, tiles: [[Tile.Spawn, Tile.Empty]] };
+    const room = new GameRoom("countdown", map);
+    const messages: { type: string; countdownMs?: number; players: { x: number }[] }[] = [];
+    const socket = { send: (raw: string) => messages.push(JSON.parse(raw)) };
+    room.join("p1", "Un", socket as never);
+
+    room.startCountdown(3000);
+    room.handle("p1", { type: "MOVE", direction: "RIGHT" });
+    expect(messages.at(-1)).toMatchObject({ countdownMs: 3000, players: [{ x: 0 }] });
+
+    vi.advanceTimersByTime(3000);
+    room.handle("p1", { type: "MOVE", direction: "RIGHT" });
+    expect(messages.at(-1)).toMatchObject({ countdownMs: 0, players: [{ x: 1 }] });
   });
 });

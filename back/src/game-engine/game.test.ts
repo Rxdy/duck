@@ -43,6 +43,12 @@ describe("applyMove", () => {
     expect(next.players[0]).toMatchObject({ x: 0, y: 0 });
   });
 
+  it("turns the player even when a wall blocks the step", () => {
+    const next = applyMove(buildState(), "p1", "UP");
+    expect(next.players[0]).toMatchObject({ x: 0, y: 0, facing: "UP" });
+    expect(applyMove(next, "p1", "LEFT").players[0]).toMatchObject({ facing: "LEFT" });
+  });
+
   it("blocks movement outside the map bounds", () => {
     const state = buildState();
     const next = applyMove(state, "p1", "LEFT");

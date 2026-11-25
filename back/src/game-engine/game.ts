@@ -67,8 +67,8 @@ export function applyMove(
   direction: Direction,
   now: number = Date.now(),
 ): GameState {
-  const player = state.players.find((p) => p.id === playerId);
-  if (!player) return state;
+  const current = state.players.find((p) => p.id === playerId);
+  if (!current) return state;
 
   // Le typage promet une des quatre directions ; le réseau, lui, ne promet
   // rien. Déstructurer directement le résultat de DIRECTION_DELTA a longtemps
@@ -80,23 +80,31 @@ export function applyMove(
   const delta = DIRECTION_DELTA[direction];
   if (!delta) return state;
 
+  // Le canard pivote avant tout : un mur ou un adversaire intouchable peut
+  // l'empêcher d'avancer, pas de se tourner.
+  const player: Player = { ...current, facing: direction };
+  const turned: GameState =
+    current.facing === direction
+      ? state
+      : { ...state, players: state.players.map((p) => (p.id === playerId ? player : p)) };
+
   const { dx, dy } = delta;
   const targetX = player.x + dx;
   const targetY = player.y + dy;
 
   if (!isWalkable(state.map, targetX, targetY)) {
-    return state;
+    return turned;
   }
 
   // Un autre joueur occupe la case visée : soit on le TOUCHE (il repart à son
   // spawn, on prend sa place), soit il fait mur — quand l'un des deux est
   // immunisé. Perdre sa position, pas ses points : la sanction est du temps
   // de trajet, pas un score effacé, ce qui garde les remontées possibles.
-  const blocker = state.players.find(
+  const blocker = turned.players.find(
     (p) => p.id !== playerId && p.x === targetX && p.y === targetY,
   );
   if (blocker && !canTag(player, blocker, now)) {
-    return state;
+    return turned;
   }
 
   // Deux façons de marquer : un Goal partagé (mode équipe, une seule base
@@ -104,7 +112,7 @@ export function applyMove(
   // docs/02-gameplay.md#modes-de-jeu — "chaque joueur possède sa propre
   // base... entrer sur une base adverse rapporte +1 point").
   const reachedSharedGoal = tileAt(state.map, targetX, targetY) === Tile.Goal;
-  const reachedEnemyBase = state.players.some(
+  const reachedEnemyBase = turned.players.some(
     (p) => p.id !== playerId && p.spawnX === targetX && p.spawnY === targetY,
   );
 
@@ -114,10 +122,10 @@ export function applyMove(
   // base, dans le même mouvement.
   const stolen = blocker ? Math.min(POINTS_STOLEN_PER_TAG, blocker.score) : 0;
   const afterTag: Player[] = blocker
-    ? state.players.map((p) =>
+    ? turned.players.map((p) =>
         p.id === blocker.id ? { ...sentHome(p, now), score: p.score - stolen } : p,
       )
-    : state.players;
+    : turned.players;
 
   const scored = reachedSharedGoal || reachedEnemyBase;
   const gained = stolen + (scored ? POINTS_PER_BASE : 0);
@@ -128,7 +136,7 @@ export function applyMove(
     // immunisé comme n'importe quel retour au spawn, sinon marquer serait le
     // meilleur moyen de se faire cueillir chez soi juste après.
     return {
-      ...state,
+      ...turned,
       players: afterTag.map((p) =>
         p.id === playerId ? { ...sentHome(p, now), score: p.score + gained } : p,
       ),
@@ -137,7 +145,7 @@ export function applyMove(
 
   const updatedPlayer: Player = { ...player, x: targetX, y: targetY, score: player.score + gained };
   return {
-    ...state,
+    ...turned,
     players: afterTag.map((p) => (p.id === playerId ? updatedPlayer : p)),
   };
 }

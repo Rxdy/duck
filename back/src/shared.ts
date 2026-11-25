@@ -20,7 +20,7 @@ export const PLAYER_COLORS = ["#FF4D6D", "#00C2D1", "#FFB100", "#3FC46B"] as con
  * de bases que de joueurs) et le nombre de bots à ajouter — d'où un simple
  * nombre plutôt qu'une configuration par mode.
  */
-export const GAME_MODES = { duel: 2, ffa3: 3, ffa4: 4 } as const;
+export const GAME_MODES = { duel: 2, ffa4: 4 } as const;
 
 export type GameMode = keyof typeof GAME_MODES;
 

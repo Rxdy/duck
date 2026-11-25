@@ -57,6 +57,9 @@ export interface MoveMessage {
 
 export interface StateMessage {
   type: "STATE";
+  // Temps restant du décompte de départ (0 une fois la partie lancée). Une
+  // durée, l'horloge du navigateur n'étant pas celle du serveur.
+  countdownMs?: number;
   players: PlayerState[];
 }
 
@@ -68,6 +71,9 @@ export interface StateMessage {
  */
 export interface MapMessage {
   type: "MAP";
+  // Identifiant du destinataire : lui seul permet au client de savoir quel
+  // canard est le sien, pour que la caméra zoomée le suive.
+  you?: PlayerId;
   width: number;
   height: number;
   tiles: string[][];

@@ -1,3 +1,4 @@
+import type { Direction } from "../protocol.js";
 import type { PlayerId } from "../shared.js";
 
 export interface Player {
@@ -12,6 +13,9 @@ export interface Player {
   spawnX: number;
   spawnY: number;
   score: number;
+  // Côté vers lequel le canard est tourné : celui du dernier ordre reçu, même
+  // si un mur l'a empêché d'avancer. Absent tant qu'il n'a reçu aucun ordre.
+  facing?: Direction;
   // Instant (epoch ms) jusqu'auquel le joueur est intouchable, après un
   // retour au spawn (touché ou point marqué). 0 = pas d'immunité. Voir
   // game.ts#applyMove : elle est purement DÉFENSIVE — un joueur immunisé ne

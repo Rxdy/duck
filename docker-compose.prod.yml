@@ -45,6 +45,7 @@ services:
       PORT: "8080"
       DATABASE_URL: postgres://duck:${POSTGRES_PASSWORD:?Définir POSTGRES_PASSWORD dans .env}@db:5432/duck
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://duck.rxdy.fr}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
     labels:
       # Watchtower (mode --label-enable) met l'image à jour quand un nouveau « latest » est publié.
       - com.centurylinklabs.watchtower.enable=true

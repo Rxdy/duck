@@ -67,7 +67,7 @@ describe("les cartes officielles livrées", () => {
       const spawns = new Set(raw.tiles.flat().filter((k) => k.startsWith("spawn-"))).size;
       perMode.set(spawns, (perMode.get(spawns) ?? 0) + 1);
     }
-    for (const players of [2, 3, 4]) {
+    for (const players of [2, 4]) {
       expect(perMode.get(players) ?? 0, `${players} joueurs`).toBeGreaterThanOrEqual(3);
     }
   });
