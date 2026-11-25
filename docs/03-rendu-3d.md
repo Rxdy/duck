@@ -38,7 +38,7 @@ faisant par téléportation d'une case à l'autre, aucune animation de transitio
 ## Technologies envisagées
 
 - **Three.js** ou **Babylon.js**
-- Côté React : **React Three Fiber** (wrapper Three.js) pour rester dans l'écosystème front
+- Côté front : Three.js utilisé directement dans les composants Vue
 
 ## Pourquoi ce choix
 

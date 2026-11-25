@@ -1,13 +1,22 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
+import { isOriginAllowed, parseAllowedOrigins } from "./origins.js";
 import type { ClientMessage, ServerMessage } from "./protocol.js";
 import { parseClientMessage } from "./clientMessage.js";
 import { buildMapFromWire, parseWireSpawns } from "./mapWire.js";
 import { GameRoom, type MatchContext } from "./room.js";
 import { saveMapFile, type SavedMapPayload } from "./mapsStorage.js";
 import { listOfficialMaps, pickRandomOfficialMap } from "./officialMaps.js";
-import { getMatchStats, listMatchesFor, recordMatch, type MatchResult } from "./db.js";
+import {
+  closeDb,
+  DATABASE_URL,
+  getMatchStats,
+  listMatchesFor,
+  recordMatch,
+  type MatchResult,
+} from "./db.js";
+import { applySchemaWhenReady } from "./migrate.js";
 import {
   getAccountById,
   getAccountIdForToken,
@@ -25,8 +34,9 @@ import {
   STARTING_RATING,
 } from "./rating.js";
 import { ensureBotPopulation, pickBotOpponents } from "./botAccounts.js";
-import { DEFAULT_GAME_MODE, isGameMode, playerCountFor } from "./shared.js";
-import { BOT_LEVELS, DEFAULT_BOT_LEVEL, isBotLevel } from "./bots.js";
+import { DEFAULT_GAME_MODE, isGameMode, playerCountFor, type GameMode } from "./shared.js";
+import { BOT_LEVELS, DEFAULT_BOT_LEVEL, isBotLevel, type BotLevel } from "./bots.js";
+import { Matchmaker } from "./matchmaking.js";
 
 const PORT = Number(process.env.PORT ?? 8080);
 
@@ -59,10 +69,22 @@ function bearerToken(req: IncomingMessage): string | undefined {
   return header.slice("Bearer ".length);
 }
 
+const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
+
 const httpServer = createServer((req, res) => {
-  // Le front (port Vite séparé) et le back n'ont jamais la même origine, même
-  // en local : sans ces en-têtes, fetch() depuis /creatif échouerait en CORS.
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // CORS : seules les origines autorisées (ALLOWED_ORIGINS, voir origins.ts) peuvent appeler l'API depuis un
+  // navigateur. En local le front (port Vite) et le back n'ont pas la même origine ; en production ils sont
+  // sur le même domaine, mais le WebSocket et les requêtes POST portent quand même un en-tête Origin.
+  const origin = req.headers.origin;
+  if (!isOriginAllowed(origin, allowedOrigins)) {
+    res.writeHead(403, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "origin_not_allowed" }));
+    return;
+  }
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", allowedOrigins.includes("*") ? "*" : origin);
+    res.setHeader("Vary", "Origin");
+  }
 
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
@@ -411,8 +433,13 @@ const httpServer = createServer((req, res) => {
   res.end();
 });
 
-const wss = new WebSocketServer({ server: httpServer });
+// Un site tiers ne doit pas pouvoir ouvrir de WebSocket vers le serveur avec le navigateur d'un joueur.
+const wss = new WebSocketServer({
+  server: httpServer,
+  verifyClient: ({ origin }: { origin?: string }) => isOriginAllowed(origin, allowedOrigins),
+});
 const rooms = new Map<string, GameRoom>();
+const matchmaker = new Matchmaker();
 
 // Premier à ce score gagne, quel que soit le mode : les règles ne changent
 // pas d'un mode à l'autre, seul le nombre de joueurs (voir
@@ -433,6 +460,39 @@ function recordMatchResult(result: MatchResult): void {
   applyMatchRatings(result).catch((error: unknown) => {
     console.error("Échec de la mise à jour du classement :", error);
   });
+}
+
+/**
+ * Complète les places restées vides au moment du départ (voir
+ * matchmaking.ts) : ce qui n'a pas trouvé d'humain en dix secondes se joue
+ * contre un bot. Appelé une seule fois par salle, juste avant son départ —
+ * d'où le comptage des places à cet instant et non à la création.
+ *
+ * `rating` est celui du joueur qui a OUVERT la salle : c'est lui qui a attendu,
+ * et le niveau des adversaires artificiels doit rester celui qu'on lui avait
+ * promis même si d'autres l'ont rejoint entre-temps.
+ */
+async function fillWithBots(room: GameRoom, rating: number, botLevel: BotLevel): Promise<void> {
+  const seats = room.freeSeats;
+  if (seats <= 0) return;
+
+  // Adversaires artificiels choisis dans la population de bots (voir
+  // botAccounts.ts) : ce sont de vrais comptes, avec pseudo et classement.
+  // Rien dans l'interface ne les distingue d'un humain.
+  const opponents = await pickBotOpponents(rating, seats).catch(() => []);
+  for (let i = 0; i < seats; i++) {
+    const bot = opponents[i];
+    if (bot) {
+      // Le niveau de jeu vient du COMPTE du bot, pas de son classement (voir
+      // botAccounts.ts#levelOf) : son classement bouge avec ses résultats, son
+      // intelligence non.
+      room.addBot(randomUUID(), bot.username, bot.level, bot.anonId);
+    } else {
+      // Base injoignable : on complète quand même la partie plutôt que de
+      // laisser le joueur seul sur le plateau.
+      room.addBot(randomUUID(), `${BOT_LEVELS[botLevel].label} ${i + 1}`, botLevel);
+    }
+  }
 }
 
 /**
@@ -478,20 +538,35 @@ wss.on("connection", (socket: WebSocket) => {
   const playerId = randomUUID();
   let currentRoom: GameRoom | null = null;
   let currentRoomId: string | null = null;
+  // Mode de la salle rejointe : c'est la clé sous laquelle le matchmaker la
+  // range (voir matchmaking.ts), donc ce qu'il faut pour l'en retirer au
+  // départ du joueur.
+  let currentMode: GameMode | null = null;
 
   function dispatch(message: ClientMessage): void {
     if (message.type === "JOIN") {
-      // Pas encore de vrai multijoueur (pas de salle partagée entre humains,
-      // voir docs/08-roadmap.md) : chaque JOIN crée sa propre partie fraîche,
-      // exactement comme JOIN_TEST. Réutiliser une salle partagée figée
-      // (l'ancien "lobby" constant) causait deux bugs une fois qu'on
-      // relançait une partie : le bot jamais vraiment nettoyé restait dans
-      // la liste des joueurs et décalait l'attribution des couleurs (même
-      // couleur que le nouvel arrivant), et la carte piochée à la toute
-      // première partie ne changeait plus jamais ensuite.
+      // Salle partagée : on rejoint celle qui attend des joueurs dans ce mode
+      // s'il y reste une place, et on n'en ouvre une neuve que sinon (voir
+      // matchmaking.ts). C'est ce qui fait se rencontrer deux joueurs qui
+      // cliquent en même temps — avant, chaque JOIN créait sa propre salle
+      // privée et tout le monde jouait seul contre des bots.
       resolveAccessory(message.token)
         .then(async (accessory) => {
           const mode = isGameMode(message.mode) ? message.mode : DEFAULT_GAME_MODE;
+
+          const open = matchmaker.find(mode);
+          if (open) {
+            currentRoom = open;
+            currentRoomId = open.id;
+            currentMode = mode;
+            open.join(playerId, message.name, socket, message.anonId, accessory);
+            socket.send(JSON.stringify(open.getMapMessage()));
+            // Cette arrivée a peut-être complété la salle : elle part alors
+            // sans attendre la fin du délai.
+            matchmaker.settle(mode);
+            return;
+          }
+
           // Niveau des bots : demandé par le client (réglage/essai), sinon
           // celui par défaut. Le nom du bot le porte pour qu'on voie tout de
           // suite à qui on a affaire dans le score.
@@ -517,45 +592,36 @@ wss.on("connection", (socket: WebSocket) => {
           }
 
           currentRoomId = `${mode}-${randomUUID()}`;
+          currentMode = mode;
           const matchContext: MatchContext = {
             mapName: official.name,
             mode,
             onEnd: recordMatchResult,
           };
-          currentRoom = new GameRoom(
+          const room = new GameRoom(
             currentRoomId,
             official.map,
             official.spawns,
             WIN_SCORE,
             matchContext,
+            // La carte a autant de bases que le mode a de joueurs : c'est elle
+            // qui fixe le nombre de places, donc quand la salle est pleine.
+            official.spawns.length,
           );
-          rooms.set(currentRoomId, currentRoom);
-          currentRoom.join(playerId, message.name, socket, message.anonId, accessory);
-          socket.send(JSON.stringify(currentRoom.getMapMessage()));
+          currentRoom = room;
+          rooms.set(currentRoomId, room);
 
-          // Un bot par base restante (le joueur a déjà pris la première) : le
-          // mode décide du nombre de joueurs, la carte a été choisie pour
-          // avoir exactement ce nombre de bases, donc duel -> 1 bot,
-          // FFA 4 -> 3 bots. Ils seront remplacés par de vrais joueurs quand
-          // le matchmaking existera (voir docs/08-roadmap.md).
-          // Adversaires artificiels choisis dans la population de bots (voir
-          // botAccounts.ts) : ce sont de vrais comptes, avec pseudo et
-          // classement. Rien dans l'interface ne les distingue d'un humain.
-          const seats = official.spawns.length - 1;
-          const opponents = await pickBotOpponents(playerRating, seats).catch(() => []);
-          for (let i = 0; i < seats; i++) {
-            const bot = opponents[i];
-            if (bot) {
-              // Le niveau de jeu vient du COMPTE du bot, pas de son classement
-              // (voir botAccounts.ts#levelOf) : son classement bouge avec ses
-              // résultats, son intelligence non.
-              currentRoom.addBot(randomUUID(), bot.username, bot.level, bot.anonId);
-            } else {
-              // Base injoignable : on complète quand même la partie plutôt
-              // que de laisser le joueur seul sur le plateau.
-              currentRoom.addBot(randomUUID(), `${BOT_LEVELS[botLevel].label} ${i + 1}`, botLevel);
-            }
-          }
+          // Mise en attente AVANT l'entrée du joueur : sans ça, le premier
+          // arrivant reçoit un WAITING sans échéance, puis plus rien jusqu'au
+          // départ — un compte à rebours qui commence à un chiffre inconnu.
+          matchmaker.hold(mode, room, () => fillWithBots(room, playerRating, botLevel));
+          room.join(playerId, message.name, socket, message.anonId, accessory);
+          socket.send(JSON.stringify(room.getMapMessage()));
+          // Un mode à une seule place partirait immédiatement : il n'y a
+          // personne à attendre. Aucun mode n'est dans ce cas aujourd'hui
+          // (voir shared.ts#GAME_MODES), mais la salle ne doit pas dépendre de
+          // cette coïncidence pour partir.
+          matchmaker.settle(mode);
         })
         .catch((error: unknown) => {
           console.error("Échec du JOIN :", error);
@@ -576,6 +642,9 @@ wss.on("connection", (socket: WebSocket) => {
       for (let i = 1; i < spawns.length; i++) {
         currentRoom.addBot(randomUUID(), `Bot ${i}`);
       }
+      // Pas de mise en attente : l'entraînement se joue seul contre des bots,
+      // sur sa propre carte, et n'est jamais partagé. Il n'a personne à
+      // attendre, donc il joue dès maintenant (voir room.ts#openForWaiting).
       return;
     }
 
@@ -608,13 +677,23 @@ wss.on("connection", (socket: WebSocket) => {
   });
 
   socket.on("close", () => {
-    currentRoom?.leave(playerId);
-    // Chaque salle n'est utilisée que par cet unique humain (+ ses bots) :
-    // une fois qu'il part, elle n'a plus aucune raison de persister en
-    // mémoire pour le reste de la durée de vie du process.
-    if (currentRoomId) rooms.delete(currentRoomId);
+    if (!currentRoom) return;
+    currentRoom.leave(playerId);
+
+    // Salle encore en attente et vidée de ses humains : on désarme son départ,
+    // sinon des bots entameraient une partie que plus personne ne regarde.
+    if (currentMode) matchmaker.release(currentMode, currentRoom);
+
+    // Une salle est PARTAGÉE depuis le matchmaking : elle ne disparaît que
+    // lorsque son dernier humain s'en va. L'oublier au départ du premier
+    // couperait la partie de ceux qui restent.
+    if (currentRoom.humanCount === 0 && currentRoomId) rooms.delete(currentRoomId);
   });
 });
+
+// Le schéma est appliqué AVANT d'accepter des joueurs : une mise à jour apporte ses migrations avec elle.
+const appliedSchema = await applySchemaWhenReady(DATABASE_URL);
+console.log(`Schéma de base appliqué (${appliedSchema.length} fichiers)`);
 
 httpServer.listen(PORT, () => {
   console.log(`Duck server listening on :${PORT}`);
@@ -629,3 +708,21 @@ httpServer.listen(PORT, () => {
       console.error("Peuplement des bots impossible :", error);
     });
 });
+
+// Arrêt propre : Watchtower arrête le conteneur à chaque mise à jour. On prévient les joueurs connectés (code 1001,
+// « le serveur s'en va »), on ferme les connexions et la base, puis on sort avec le code 0. Délai maximal : 10 s.
+function shutdown(signal: string): void {
+  console.log(`${signal} reçu : arrêt du serveur`);
+  setTimeout(() => process.exit(1), 10_000).unref();
+  for (const client of wss.clients) client.close(1001, "server_shutdown");
+  wss.close();
+  httpServer.close(() => {
+    closeDb().then(
+      () => process.exit(0),
+      () => process.exit(1),
+    );
+  });
+  httpServer.closeAllConnections();
+}
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
