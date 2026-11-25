@@ -32,7 +32,7 @@ ELO_USER := $(if $(filter command line,$(origin USER)),$(USER),)
         format format-fix typecheck typecheck-front typecheck-back \
         test test-front test-back build check \
         db-up db-down db-wait db-schema db-psql db-logs db-reset elo \
-        up down build-images logs ps \
+        up down build-images test-images release logs ps \
         sprites icons clean clean-db
 
 ##@ Aide
@@ -169,6 +169,14 @@ logs: ## Suit les logs de toute la pile
 
 ps: ## État des conteneurs
 	$(COMPOSE) ps
+
+test-images: ## Construit les images et teste les vraies requêtes dessus (nginx, back, Postgres, arrêt propre)
+	docker build -t duck-front:ci front
+	docker build -f back/Dockerfile -t duck-back:ci .
+	scripts/tester-images.sh duck-front:ci duck-back:ci
+
+release: ## Publie une version : make release V=1.0.0 (tag vX.Y.Z sur main ; la CI pose la version sur les images et crée la release)
+	@scripts/release.sh "$(V)"
 
 ##@ Rendu (vérification visuelle)
 
