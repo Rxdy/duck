@@ -8,7 +8,14 @@ import { buildMapFromWire, parseWireSpawns } from "./mapWire.js";
 import { GameRoom, type MatchContext } from "./room.js";
 import { saveMapFile, type SavedMapPayload } from "./mapsStorage.js";
 import { listOfficialMaps, pickRandomOfficialMap } from "./officialMaps.js";
-import { getMatchStats, listMatchesFor, recordMatch, type MatchResult } from "./db.js";
+import {
+  DATABASE_URL,
+  getMatchStats,
+  listMatchesFor,
+  recordMatch,
+  type MatchResult,
+} from "./db.js";
+import { applySchemaWhenReady } from "./migrate.js";
 import {
   getAccountById,
   getAccountIdForToken,
@@ -682,6 +689,10 @@ wss.on("connection", (socket: WebSocket) => {
     if (currentRoom.humanCount === 0 && currentRoomId) rooms.delete(currentRoomId);
   });
 });
+
+// Le schéma est appliqué AVANT d'accepter des joueurs : une mise à jour apporte ses migrations avec elle.
+const appliedSchema = await applySchemaWhenReady(DATABASE_URL);
+console.log(`Schéma de base appliqué (${appliedSchema.length} fichiers)`);
 
 httpServer.listen(PORT, () => {
   console.log(`Duck server listening on :${PORT}`);

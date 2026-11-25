@@ -29,7 +29,7 @@ export interface MatchResult {
 // d'échouer avec des identifiants par défaut de `pg` qui ne correspondent à
 // rien ici. Si la base est réellement injoignable, le pool échouera à la
 // première requête, pas à l'import — voir recordMatch, qui avale l'erreur.
-const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://duck:duck@localhost:5432/duck";
+export const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://duck:duck@localhost:5432/duck";
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 export const db = drizzle(pool);
