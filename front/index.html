@@ -8,9 +8,30 @@
       name="description"
       content="Duck, jeu multijoueur en ligne sur grille : rejoins la base adverse pour marquer des points."
     />
-    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="alternate icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=2" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Duck</title>
+
+    <!-- Carte affichée quand on partage le lien (Discord, WhatsApp, réseaux...). Les robots
+         n'exécutent pas le JavaScript : tout est ici, et les adresses sont absolues. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Duck" />
+    <meta property="og:locale" content="fr_FR" />
+    <meta property="og:url" content="https://duck.rxdy.fr/" />
+    <meta property="og:title" content="Duck — le jeu de canards en ligne" />
+    <meta
+      property="og:description"
+      content="Rejoins la base adverse pour marquer des points. Duel et FFA 4 joueurs, gratuit dans ton navigateur."
+    />
+    <meta property="og:image" content="https://duck.rxdy.fr/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="Quatre canards fluo rouge, jaune, vert et cyan sur un plateau en vue isométrique"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
   </head>
   <body>
     <div id="app"></div>

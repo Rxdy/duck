@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Tête du coincoin en formes plates : lisible jusqu'à 16 px, contrairement au rendu 3D entier. -->
+  <path d="M11 11V5M21 11V5" stroke="#ff4d6d" stroke-width="2.6"/>
+  <rect x="7.5" y="0.5" width="7" height="6" rx="2" fill="#ffe23a"/>
+  <rect x="17.5" y="0.5" width="7" height="6" rx="2" fill="#ffe23a"/>
+  <rect x="3" y="8" width="26" height="23.5" rx="6" fill="#ff4d6d"/>
+  <rect x="7" y="11.5" width="7.5" height="8" rx="1.2" fill="#fff"/>
+  <rect x="17.5" y="11.5" width="7.5" height="8" rx="1.2" fill="#fff"/>
+  <rect x="10" y="13" width="3.6" height="5.5" fill="#14213d"/>
+  <rect x="18.4" y="13" width="3.6" height="5.5" fill="#14213d"/>
+  <rect x="0.5" y="19" width="31" height="7" rx="3.2" fill="#fbc175"/>
+  <rect x="4" y="26" width="24" height="3.4" rx="1.7" fill="#e19a4a"/>
+</svg>
