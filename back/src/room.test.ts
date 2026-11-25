@@ -10,6 +10,12 @@ function fakeSocket() {
   return { send: vi.fn() } as unknown as WebSocket;
 }
 
+/** Dernier message reçu par une socket, décodé. */
+function lastMessage(socket: WebSocket): { type: string; [key: string]: unknown } {
+  const calls = (socket.send as ReturnType<typeof vi.fn>).mock.calls;
+  return JSON.parse(calls[calls.length - 1]![0] as string) as { type: string };
+}
+
 function testMap(seed = 1): GameMap {
   return generateMap({ width: 12, height: 12, seed });
 }
@@ -262,6 +268,146 @@ describe("GameRoom", () => {
       vi.useRealTimers();
       vi.restoreAllMocks();
     }
+  });
+
+  describe("waiting for players (salles partagées)", () => {
+    it("plays immediately when nobody put the room on hold (entraînement)", () => {
+      const room = new GameRoom("solo", twoSpawnMap());
+      const socket = fakeSocket();
+
+      room.join("p1", "Testeur", socket);
+
+      expect(room.isStarted).toBe(true);
+      expect(lastMessage(socket).type).toBe("STATE");
+    });
+
+    it("announces the wait, its capacity and its deadline instead of a playable board", () => {
+      const room = new GameRoom("duel", twoSpawnMap(), [], undefined, undefined, 2);
+      const socket = fakeSocket();
+
+      room.openForWaiting(Date.now() + 10_000);
+      room.join("p1", "Alice", socket);
+
+      const message = lastMessage(socket);
+      expect(message.type).toBe("WAITING");
+      expect(message.capacity).toBe(2);
+      expect(message.players).toHaveLength(1);
+      // Une durée, jamais une date : les deux horloges ne sont pas la même.
+      expect(message.startsInMs).toBeGreaterThan(0);
+      expect(message.startsInMs).toBeLessThanOrEqual(10_000);
+    });
+
+    it("refuses moves while the room is still waiting", () => {
+      const room = new GameRoom("duel", twoSpawnMap(), [], undefined, undefined, 2);
+      const socket = fakeSocket();
+      room.openForWaiting(Date.now() + 10_000);
+      room.join("p1", "Alice", socket);
+      const before = lastMessage(socket).players as { x: number; y: number }[];
+
+      room.handle("p1", { type: "MOVE", direction: "RIGHT" });
+
+      // Le joueur n'a pas bougé, et aucun STATE n'a été diffusé : la partie
+      // n'a pas commencé, la touche ne doit rien faire.
+      expect(lastMessage(socket).type).toBe("WAITING");
+      expect(lastMessage(socket).players).toEqual(before);
+    });
+
+    it("accepts moves and broadcasts STATE once the game starts", () => {
+      const room = new GameRoom("duel", twoSpawnMap(), [], undefined, undefined, 2);
+      const socket = fakeSocket();
+      room.openForWaiting(Date.now() + 10_000);
+      room.join("p1", "Alice", socket);
+
+      room.start();
+      expect(lastMessage(socket).type).toBe("STATE");
+
+      room.handle("p1", { type: "MOVE", direction: "RIGHT" });
+      expect(lastMessage(socket).type).toBe("STATE");
+    });
+
+    it("counts seats and humans, so the matchmaker knows what is left to fill", () => {
+      const room = new GameRoom("duel", twoSpawnMap(), [], undefined, undefined, 2);
+
+      expect(room.freeSeats).toBe(2);
+      expect(room.isFull).toBe(false);
+
+      room.join("p1", "Alice", fakeSocket());
+      expect(room.freeSeats).toBe(1);
+      expect(room.humanCount).toBe(1);
+
+      // Un bot occupe une place mais n'est pas un humain : c'est cette
+      // distinction qui décide si une salle a encore quelqu'un à faire jouer.
+      room.addBot("bot", "Bot");
+      expect(room.freeSeats).toBe(0);
+      expect(room.isFull).toBe(true);
+      expect(room.humanCount).toBe(1);
+    });
+
+    it("ne facture pas l'attente à la durée de la partie", () => {
+      // Pendant du test « chronomètre la partie… » : depuis les salles
+      // partagées, le premier arrivant peut patienter dix secondes avant que
+      // la partie parte. Ces secondes ne sont pas de la partie jouée.
+      vi.useFakeTimers();
+      try {
+        const onEnd = vi.fn();
+        const room = new GameRoom(
+          "duel-attente",
+          {
+            width: 3,
+            height: 1,
+            tiles: [[Tile.Spawn, Tile.Empty, Tile.Goal]],
+          },
+          [],
+          1,
+          { mapName: "Sans nom", mode: "duel", onEnd },
+          2,
+        );
+
+        room.openForWaiting(Date.now() + 10_000);
+        room.join("p1", "Alice", fakeSocket());
+        vi.advanceTimersByTime(10_000); // dix secondes à attendre un adversaire
+        room.start();
+
+        room.handle("p1", { type: "MOVE", direction: "RIGHT" });
+        vi.advanceTimersByTime(150);
+        room.handle("p1", { type: "MOVE", direction: "RIGHT" }); // atteint le but
+
+        expect(onEnd.mock.calls[0]![0].durationMs).toBe(150);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("start() ne remet pas le chrono à zéro sur une partie déjà lancée", () => {
+      // Le délai d'attente peut expirer APRÈS qu'une salle pleine soit partie
+      // (voir matchmaking.ts) : ce réveil tardif ne doit rien réinitialiser.
+      vi.useFakeTimers();
+      try {
+        const onEnd = vi.fn();
+        const room = new GameRoom(
+          "duel-double-depart",
+          {
+            width: 3,
+            height: 1,
+            tiles: [[Tile.Spawn, Tile.Empty, Tile.Goal]],
+          },
+          [],
+          1,
+          { mapName: "Sans nom", mode: "duel", onEnd },
+          2,
+        );
+
+        room.join("p1", "Alice", fakeSocket());
+        room.handle("p1", { type: "MOVE", direction: "RIGHT" });
+        vi.advanceTimersByTime(150);
+        room.start(); // réveil tardif, la salle n'attendait pas
+        room.handle("p1", { type: "MOVE", direction: "RIGHT" });
+
+        expect(onEnd.mock.calls[0]![0].durationMs).toBe(150);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   describe("win condition (winScore)", () => {

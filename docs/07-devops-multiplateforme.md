@@ -28,8 +28,8 @@ Conséquences techniques :
 
 ## Infrastructure de déploiement
 
-- Front : React + TypeScript + Vite
-- Rendu : React Three Fiber (Three.js)
+- Front : Vue 3 + TypeScript + Vite
+- Rendu : Three.js
 - Back : Node.js ou Bun
 - Base : PostgreSQL
 - Communication : WebSocket

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onUnmounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useGameStore } from "../store/gameStore.js";
 import { useSettingsStore } from "../store/settingsStore.js";
@@ -61,6 +61,38 @@ const displayPlayers = computed(() =>
 
 const winner = computed(() => displayPlayers.value.find((p) => p.id === store.winnerId));
 
+// Compte à rebours de l'attente (voir back/src/matchmaking.ts). Le serveur
+// n'envoie WAITING qu'aux changements — une arrivée — et non chaque seconde :
+// c'est donc au client d'égrener le temps entre deux messages, en repartant de
+// l'échéance annoncée à chaque fois qu'elle est rafraîchie.
+const msLeft = ref(0);
+let ticker: ReturnType<typeof setInterval> | null = null;
+
+function stopTicker() {
+  if (ticker === null) return;
+  clearInterval(ticker);
+  ticker = null;
+}
+
+watch(
+  () => store.waiting,
+  (waiting) => {
+    if (!waiting) {
+      stopTicker();
+      return;
+    }
+    msLeft.value = waiting.startsInMs;
+    ticker ??= setInterval(() => {
+      msLeft.value = Math.max(0, msLeft.value - 250);
+    }, 250);
+  },
+  { immediate: true },
+);
+
+onUnmounted(stopTicker);
+
+const secondsLeft = computed(() => Math.ceil(msLeft.value / 1000));
+
 // Classement de fin de partie : par score décroissant, le vainqueur devant en
 // cas d'égalité (il a atteint le score requis en premier). Le HUD en jeu, lui,
 // garde l'ordre d'arrivée — un tableau qui se réordonne à chaque point rendrait
@@ -89,6 +121,46 @@ const rankedPlayers = computed(() =>
       :reduced-motion="settings.reducedMotion"
       @move="move"
     />
+
+    <div
+      v-if="store.waiting"
+      class="absolute inset-0 z-20 flex flex-col items-center justify-center gap-6 bg-surface-deep/90 text-center"
+    >
+      <RouterLink
+        to="/jouer"
+        aria-label="Quitter la file"
+        class="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-ink/10 text-ink/70"
+      >
+        ✕
+      </RouterLink>
+
+      <p class="text-sm uppercase tracking-widest text-ink/50">En attente d'adversaires</p>
+
+      <p class="text-4xl font-bold tabular-nums">
+        {{ displayPlayers.length }}<span class="text-ink/40">/{{ store.waiting.capacity }}</span>
+      </p>
+
+      <div class="flex w-full max-w-xs flex-col gap-2">
+        <div
+          v-for="player in displayPlayers"
+          :key="player.id"
+          class="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold"
+        >
+          <span class="h-3 w-3 shrink-0 rounded-full" :style="{ backgroundColor: player.color }" />
+          {{ player.name }}
+        </div>
+      </div>
+
+      <!-- Le délai est un PLAFOND : la partie part avant si la salle se
+           remplit. Le dire évite que le joueur croie devoir attendre la fin
+           du compte à rebours dans tous les cas. -->
+      <p class="text-sm text-ink/50">
+        <template v-if="secondsLeft > 0">
+          Des adversaires vous rejoignent dans {{ secondsLeft }}&nbsp;s
+        </template>
+        <template v-else>Constitution de la partie…</template>
+      </p>
+    </div>
 
     <div
       v-if="winner"

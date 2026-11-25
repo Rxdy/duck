@@ -1,7 +1,4 @@
-const WS_URL = import.meta.env.VITE_SERVER_WS_URL ?? "ws://localhost:8080";
-// "ws://" -> "http://", "wss://" -> "https://", voir lib/mapsApi.ts.
-const HTTP_URL = WS_URL.replace(/^ws/, "http");
-
+import { HTTP_URL } from "./serverUrl.js";
 export interface AuthSuccess {
   token: string;
   username: string;

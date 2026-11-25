@@ -126,5 +126,24 @@ export interface ErrorMessage {
   message: string;
 }
 
+/**
+ * La salle réunit encore ses joueurs (voir back/src/matchmaking.ts) : la
+ * partie n'est pas partie, et le serveur refuse les coups (voir
+ * room.ts#handle). Distinct de STATE, qui signifie « à toi de jouer » : sans
+ * ce message le client afficherait un plateau jouable dont les touches ne
+ * répondent pas, ce qui se lit comme un bug et non comme une attente.
+ *
+ * `startsInMs` est le temps restant AU PLUS : la partie part avant si la
+ * salle se remplit. Une durée plutôt qu'une date, pour la même raison que
+ * PlayerState#immuneForMs.
+ */
+export interface WaitingMessage {
+  type: "WAITING";
+  players: PlayerState[];
+  capacity: number;
+  startsInMs: number;
+}
+
 export type ClientMessage = JoinMessage | MoveMessage | PingMessage | JoinTestMessage;
-export type ServerMessage = StateMessage | ScoreMessage | EndMessage | MapMessage | ErrorMessage;
+export type ServerMessage =
+  StateMessage | ScoreMessage | EndMessage | MapMessage | ErrorMessage | WaitingMessage;
