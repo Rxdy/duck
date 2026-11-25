@@ -1,6 +1,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
+import { isOriginAllowed, parseAllowedOrigins } from "./origins.js";
 import type { ClientMessage, ServerMessage } from "./protocol.js";
 import { parseClientMessage } from "./clientMessage.js";
 import { buildMapFromWire, parseWireSpawns } from "./mapWire.js";
@@ -60,10 +61,22 @@ function bearerToken(req: IncomingMessage): string | undefined {
   return header.slice("Bearer ".length);
 }
 
+const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
+
 const httpServer = createServer((req, res) => {
-  // Le front (port Vite séparé) et le back n'ont jamais la même origine, même
-  // en local : sans ces en-têtes, fetch() depuis /creatif échouerait en CORS.
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  // CORS : seules les origines autorisées (ALLOWED_ORIGINS, voir origins.ts) peuvent appeler l'API depuis un
+  // navigateur. En local le front (port Vite) et le back n'ont pas la même origine ; en production ils sont
+  // sur le même domaine, mais le WebSocket et les requêtes POST portent quand même un en-tête Origin.
+  const origin = req.headers.origin;
+  if (!isOriginAllowed(origin, allowedOrigins)) {
+    res.writeHead(403, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: "origin_not_allowed" }));
+    return;
+  }
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", allowedOrigins.includes("*") ? "*" : origin);
+    res.setHeader("Vary", "Origin");
+  }
 
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
@@ -412,7 +425,11 @@ const httpServer = createServer((req, res) => {
   res.end();
 });
 
-const wss = new WebSocketServer({ server: httpServer });
+// Un site tiers ne doit pas pouvoir ouvrir de WebSocket vers le serveur avec le navigateur d'un joueur.
+const wss = new WebSocketServer({
+  server: httpServer,
+  verifyClient: ({ origin }: { origin?: string }) => isOriginAllowed(origin, allowedOrigins),
+});
 const rooms = new Map<string, GameRoom>();
 const matchmaker = new Matchmaker();
 
