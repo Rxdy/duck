@@ -4,11 +4,11 @@
 
 ### Front
 
-- React
+- Vue 3
 - TypeScript
 - Vite
-- Three.js (via React Three Fiber) — voir [rendu 3D](03-rendu-3d.md)
-- Zustand
+- Three.js — voir [rendu 3D](03-rendu-3d.md)
+- Pinia
 - Tailwind
 
 ### Back
@@ -34,7 +34,7 @@ Schéma de communication :
            ↑              ↑
       Joueur A       Joueur B
            ↑              ↑
-        React / Three.js
+        Vue 3 / Three.js
 ```
 
 Le serveur est 100 % autoritaire :
@@ -125,7 +125,7 @@ Types de messages :
 Trois dossiers indépendants à la racine (un par conteneur), pas de monorepo npm workspaces :
 
 ```
-front/     client React — aucun code partagé avec le serveur, juste le protocole WebSocket
+front/     client Vue 3 — aucun code partagé avec le serveur, juste le protocole WebSocket
 back/      serveur + tout le reste (voir back/src/)
     protocol.ts       types des messages WebSocket
     shared.ts         types communs, constantes (couleurs joueurs...)
@@ -135,7 +135,7 @@ back/      serveur + tout le reste (voir back/src/)
 db/        PostgreSQL, pas de code applicatif
 ```
 
-Le **game-engine** ne connaît ni React ni les WebSockets. Il contient uniquement les règles du jeu.
+Le **game-engine** ne connaît ni Vue ni les WebSockets. Il contient uniquement les règles du jeu.
 
 Le serveur importe ce moteur pour faire tourner les parties, le client ne fait qu'afficher l'état
 reçu. Cette séparation :

@@ -4,7 +4,7 @@ Jeu multijoueur en ligne sur grille, inspiré des mini-jeux créés avec les Wir
 
 Domaine visé : `duck.mondomaine.fr`
 
-Ce dossier découpe le cahier des charges initial (voir [`../resultat.md`](../resultat.md) pour la conversation source brute) en fichiers thématiques, plus faciles à faire évoluer un par un.
+Ce dossier découpe le cahier des charges initial en fichiers thématiques, plus faciles à faire évoluer un par un.
 
 ## Sommaire
 
