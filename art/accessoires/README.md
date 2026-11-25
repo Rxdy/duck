@@ -3,7 +3,7 @@
 Branche d'atelier `art/accessoires` : les accessoires évoluent ici, **sans toucher au jeu**. On les intégrera quand le
 catalogue sera assez fourni.
 
-- Code : `front/atelier/accessoires.js` et `themes.js` (96 accessoires, 35 tenues dont 30 par thème), plus `lot1.js`. L'atelier
+- Code : `front/atelier/accessoires.js` et `themes.js` (123 accessoires, 45 tenues dont 40 par thème), plus `lot1.js` et `lot2.js`. L'atelier
   n'entre pas dans le build.
 - Rendus : `rendus/` (face et dos) et les planches `planche-*.png` (dont `planche-taille-reelle.png`, à la taille du jeu sur téléphone), refaits par `rendre.mjs` (voir son en-tête).
 
@@ -21,7 +21,6 @@ catalogue sera assez fourni.
 ## À retravailler
 
 - Tricorne : peu reconnaissable.
-- Plusieurs tenues cachent la couleur du joueur (voir `THEMES.md`).
 - Astronaute : la bulle assombrit le visage.
 - Combinaisons : une visière sur une cagoule, une cape avec un autre objet dans le dos, se mélangent mal.
 - À la taille du jeu, les petits objets (baguette, fleur, torche) se distinguent à peine : les grossir ?
@@ -36,4 +35,4 @@ catalogue sera assez fourni.
   `top-hat`, `cap` et `crown`, que le coincoin ne dessine pas encore.
 - Il faudra passer à un accessoire par emplacement, et vérifier la lisibilité à la taille réelle en partie ainsi que les
   performances sur téléphone.
-- La couleur du canard identifie le joueur : un vêtement ne doit pas la cacher entièrement.
+- La couleur du canard identifie le joueur : un vêtement ne doit pas la cacher (voir la règle dans `THEMES.md`).

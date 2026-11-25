@@ -4,20 +4,20 @@
  */
 import * as T from "three";
 
-const piece = (emplacement, id, nom, creer, extra = {}) => ({
+export const piece = (emplacement, id, nom, creer, extra = {}) => ({
   id,
   nom,
   emplacement,
   creer,
   ...extra,
 });
-const tete = (id, nom, creer) => piece("tete", id, nom, creer, { sansAntennes: true });
-const corps = (id, nom, creer) => piece("corps", id, nom, creer);
-const dos = (id, nom, creer) => piece("dos", id, nom, creer);
-const main = (id, nom, dessiner) => piece("main", id, nom, (o) => o.enMain(dessiner));
+export const tete = (id, nom, creer) => piece("tete", id, nom, creer, { sansAntennes: true });
+export const corps = (id, nom, creer) => piece("corps", id, nom, creer);
+export const dos = (id, nom, creer) => piece("dos", id, nom, creer);
+export const main = (id, nom, dessiner) => piece("main", id, nom, (o) => o.enMain(dessiner));
 
 /** Une forme plate à partir de points, avec un peu d'épaisseur pour exister de côté. */
-function plaque(o, points, couleur, x, y, z, epaisseur = 0.03, ...rot) {
+export function plaque(o, points, couleur, x, y, z, epaisseur = 0.03, ...rot) {
   const s = new T.Shape();
   points.forEach(([px, py], i) => (i ? s.lineTo(px, py) : s.moveTo(px, py)));
   const geo = new T.ExtrudeGeometry(s, { depth: epaisseur, bevelEnabled: false });
@@ -25,9 +25,11 @@ function plaque(o, points, couleur, x, y, z, epaisseur = 0.03, ...rot) {
   return o.add(geo, o.mat(couleur), x, y, z, ...rot);
 }
 
-const habille = (o, couleur) => o.habit(0.15, couleur, 1.065, 0.95, 1.05);
-const ceinture = (o, couleur, y, ep = 0.09) => o.habit(0.15, couleur, 1.082, ep, 1.064, y - 0.15);
-const coiffe = (o, couleur, y = 0.42, ep = 0.2) => o.habit(0.5, couleur, 1.085, ep, 1.075, y);
+export const habille = (o, couleur) => o.habit(0.15, couleur, 1.065, 0.95, 1.05);
+export const ceinture = (o, couleur, y, ep = 0.09) =>
+  o.habit(0.15, couleur, 1.082, ep, 1.064, y - 0.15);
+export const coiffe = (o, couleur, y = 0.42, ep = 0.2) =>
+  o.habit(0.5, couleur, 1.085, ep, 1.075, y);
 
 export const PIECES_LOT1 = [
   // ------------------------------------------------ samouraï
@@ -102,7 +104,12 @@ export const PIECES_LOT1 = [
 
   // ------------------------------------------------ robot
   tete("tete-robot", "Tête de robot", (o) => {
-    o.habit(0.5, "#94a3b8", 1.09, 1.03, 1.047, -0.003);
+    o.habit(0.5, "peau", 1.09, 1.03, 1.047, -0.003);
+    for (const [ep, y] of [
+      [0.13, 0.43],
+      [0.1, -0.004],
+    ])
+      o.habit(0.5, "#94a3b8", 1.105, ep, 1.062, y);
     o.fenetre(0.19, 0.775, 0.945, 0.2597);
     o.box(0.42, 0.025, 0.012, "#22d3ee", 0, 0.962, 0.264).material.emissive.set("#0e7490");
     for (const s of [-1, 1]) {
@@ -124,8 +131,8 @@ export const PIECES_LOT1 = [
     o.boule(0.065, "#ef4444", 0, 1.25, 0.07).material.emissive.set("#7f1d1d");
   }),
   corps("torse-robot", "Torse de robot", (o) => {
-    habille(o, "#94a3b8");
-    for (const y of [0.19, 0.52]) ceinture(o, "#475569", y, 0.1);
+    habille(o, "peau");
+    for (const y of [0.19, 0.52]) ceinture(o, "#94a3b8", y, 0.11);
     o.box(0.26, 0.17, 0.02, "#1e293b", 0, 0.34, 0.279);
     [
       ["#ef4444", -0.07],
@@ -205,8 +212,8 @@ export const PIECES_LOT1 = [
   }),
   dos("cape-vampire", "Cape à haut col", (o) => {
     for (const [couleur, dz] of [
-      ["#111118", -0.016],
-      ["#b91c1c", 0],
+      ["peau", -0.016],
+      ["peau-sombre", 0],
     ]) {
       const geo = new T.PlaneGeometry(1, 1, 36, 16);
       const p = geo.attributes.position;
@@ -236,7 +243,7 @@ export const PIECES_LOT1 = [
       plaque(
         o,
         col.map(([x, y]) => [x * 0.86, y * 0.86]),
-        "#b91c1c",
+        "peau",
         0,
         0.555,
         -0.182,
@@ -271,6 +278,7 @@ export const PIECES_LOT1 = [
     o.boule(0.04, "#dc2626", 0, 0.5, 0.283, 1, 1, 0.5).material.emissive.set("#5f0f0f");
   }),
   main("chauve-souris", "Chauve-souris", (m) => {
+    const avant = m.groupe.children.length;
     m.boule(0.075, "#3b2063", 0.04, 0.32, 0.04, 1, 1.2, 0.9);
     for (const s of [-1, 1]) {
       plaque(
@@ -293,6 +301,15 @@ export const PIECES_LOT1 = [
       );
       m.cone(0.025, 0.07, "#3b2063", 0.04 + s * 0.045, 0.43, 0.04);
       m.boule(0.016, "#fde047", 0.04 + s * 0.03, 0.34, 0.11).material.emissive.set("#a98a00");
+    }
+    // Plus petite et écartée : elle masquait le devant de la tenue.
+    for (const partie of m.groupe.children.slice(avant)) {
+      partie.position.set(
+        0.04 + (partie.position.x - 0.04) * 0.72 + 0.1,
+        0.32 + (partie.position.y - 0.32) * 0.72 + 0.08,
+        0.04 + (partie.position.z - 0.04) * 0.72 - 0.06,
+      );
+      partie.scale.multiplyScalar(0.72);
     }
   }),
 
@@ -364,16 +381,16 @@ export const PIECES_LOT1 = [
 
   // ------------------------------------------------ pilote de course
   tete("casque-integral", "Casque intégral", (o) => {
-    o.habit(0.5, "#f8fafc", 1.14, 1.06, 1.09, -0.008);
+    o.habit(0.5, "peau", 1.14, 1.06, 1.09, -0.008);
     o.fenetre(0.2, 0.765, 0.955, 0.268);
-    o.dome(0.255, "#f8fafc", 0, 1.03, 0.07, 0.45);
-    o.box(0.1, 0.03, 0.46, "#e11d48", 0, 1.15, 0.07);
+    o.dome(0.255, "peau", 0, 1.03, 0.07, 0.45);
+    o.box(0.1, 0.03, 0.46, "#f8fafc", 0, 1.15, 0.07);
     for (const x of [-0.085, 0.085]) o.box(0.035, 0.028, 0.46, "#1d4ed8", x, 1.135, 0.07);
     o.box(0.46, 0.045, 0.06, "#0f172a", 0, 0.975, 0.28);
-    o.box(0.44, 0.07, 0.012, "#e11d48", 0, 0.78, -0.135);
+    o.box(0.44, 0.07, 0.012, "#f8fafc", 0, 0.78, -0.135);
   }),
   corps("combi-course", "Combinaison de course", (o) => {
-    habille(o, "#e11d48");
+    habille(o, "peau");
     ceinture(o, "#f8fafc", 0.33, 0.13);
     // Le damier, devant et surtout derrière.
     for (let i = 0; i < 7; i++) {
@@ -387,7 +404,7 @@ export const PIECES_LOT1 = [
   }),
   dos("aileron-course", "Aileron de course", (o) => {
     for (const x of [-0.16, 0.16]) o.box(0.04, 0.24, 0.09, "#1f2937", x, 0.58, -0.37, -0.35);
-    o.box(0.64, 0.035, 0.17, "#e11d48", 0, 0.7, -0.42, -0.12);
+    o.box(0.64, 0.035, 0.17, "peau", 0, 0.7, -0.42, -0.12);
     for (const x of [-0.33, 0.33]) o.box(0.035, 0.13, 0.19, "#f8fafc", x, 0.7, -0.42);
   }),
   main("volant", "Volant", (m) => {
@@ -412,16 +429,17 @@ export const PIECES_LOT1 = [
   tete("crete", "Crête de punk", (o) => {
     coiffe(o, "#1f1f2b", 0.475, 0.05);
     for (let i = 0; i < 6; i++) {
-      const z = 0.23 - i * 0.065;
-      o.cone(
-        0.065,
-        0.3 - Math.abs(i - 2) * 0.028,
+      const loin = Math.abs(i - 2);
+      const pic = o.cone(
+        0.105,
+        0.44 - loin * 0.045,
         "#e11dca",
         0,
-        1.14 - Math.abs(i - 2) * 0.012,
-        z,
+        1.2 - loin * 0.02,
+        0.23 - i * 0.065,
         (2 - i) * 0.17,
-      ).scale.x = 0.55;
+      );
+      pic.scale.x = 0.75;
     }
   }),
   corps("blouson", "Blouson de cuir", (o) => {
@@ -492,16 +510,16 @@ export const PIECES_LOT1 = [
 
   // ------------------------------------------------ requin
   tete("capuche-requin", "Capuche requin", (o) => {
-    coiffe(o, "#64748b", 0.43, 0.19);
-    o.dome(0.265, "#64748b", 0, 1.005, 0.07, 0.8);
+    coiffe(o, "peau", 0.43, 0.19);
+    o.dome(0.265, "peau", 0, 1.005, 0.07, 0.8);
     for (let i = -3; i <= 3; i++)
       o.cone(0.032, 0.09, "#f8fafc", i * 0.068, 0.92, 0.272, Math.PI).scale.z = 0.4;
     for (const s of [-1, 1]) {
       o.boule(0.045, "#f8fafc", s * 0.2, 1.08, 0.23);
       o.boule(0.025, "#0f172a", s * 0.212, 1.083, 0.268);
-      o.box(0.045, 0.34, 0.3, "#64748b", s * 0.262, 0.82, -0.01);
+      o.box(0.045, 0.34, 0.3, "peau", s * 0.262, 0.82, -0.01);
     }
-    o.box(0.5, 0.36, 0.05, "#64748b", 0, 0.82, -0.14);
+    o.box(0.5, 0.36, 0.05, "peau", 0, 0.82, -0.14);
     plaque(
       o,
       [
@@ -509,7 +527,7 @@ export const PIECES_LOT1 = [
         [-0.2, 0],
         [-0.17, 0.3],
       ],
-      "#475569",
+      "peau-sombre",
       0,
       1.18,
       0.07,
@@ -520,7 +538,7 @@ export const PIECES_LOT1 = [
     );
   }),
   corps("costume-requin", "Costume de requin", (o) => {
-    habille(o, "#64748b");
+    habille(o, "peau");
     o.forme(
       [
         [-0.17, 0.548],
@@ -539,7 +557,7 @@ export const PIECES_LOT1 = [
           [s * 0.2, -0.07],
           [0, -0.07],
         ],
-        "#475569",
+        "peau-sombre",
         s * 0.27,
         0.37,
         0,
@@ -549,28 +567,20 @@ export const PIECES_LOT1 = [
         0,
       );
     for (const y of [0.3, 0.36, 0.42])
-      for (const s of [-1, 1]) o.box(0.008, 0.035, 0.09, "#334155", s * 0.2735, y, -0.14, 0.5);
+      for (const s of [-1, 1]) o.box(0.008, 0.035, 0.09, "peau-sombre", s * 0.2735, y, -0.14, 0.5);
   }),
   dos("queue-requin", "Queue de requin", (o) => {
-    o.cone(0.13, 0.34, "#64748b", 0, 0.34, -0.47, -Math.PI / 2 - 0.15).scale.x = 0.55;
-    plaque(
-      o,
-      [
-        [0, -0.03],
-        [0.2, 0.3],
-        [0.11, 0.02],
-        [0.17, -0.18],
-        [0, -0.08],
-      ],
-      "#475569",
-      0,
-      0.37,
-      -0.59,
-      0.035,
-      0,
-      Math.PI / 2,
-      0,
-    );
+    o.cone(0.14, 0.34, "peau", 0, 0.32, -0.47, -Math.PI / 2 - 0.15).scale.x = 0.6;
+    const nageoire = [
+      [-0.05, 0],
+      [-0.34, 0.34],
+      [-0.12, 0.17],
+      [0, 0.11],
+      [0.12, 0.17],
+      [0.34, 0.34],
+      [0.05, 0],
+    ];
+    plaque(o, nageoire, "peau-sombre", 0, 0.34, -0.62, 0.05, 0.12);
   }),
 
   // ------------------------------------------------ champignon
@@ -600,9 +610,9 @@ export const PIECES_LOT1 = [
 
   // ------------------------------------------------ ninja, refait
   tete("capuche-ninja", "Capuche de ninja", (o) => {
-    o.habit(0.5, "#1e2433", 1.095, 1.045, 1.052, -0.005);
+    o.habit(0.5, "peau-sombre", 1.095, 1.045, 1.052, -0.005);
     o.fenetre(0.2, 0.775, 0.945, 0.2608);
-    o.habit(0.5, "#dc2626", 1.115, 0.15, 1.072, 0.405);
+    o.habit(0.5, "peau", 1.115, 0.15, 1.072, 0.405);
     for (const [x, y, r] of [
       [-0.08, 0.86, -0.5],
       [0.06, 0.82, 0.35],
@@ -615,7 +625,7 @@ export const PIECES_LOT1 = [
           [0.075, -0.4],
           [-0.015, -0.36],
         ],
-        "#dc2626",
+        "peau",
         x,
         y + 0.12,
         -0.22,
@@ -625,14 +635,14 @@ export const PIECES_LOT1 = [
         r,
       );
     }
-    o.boule(0.065, "#b91c1c", 0, 0.97, -0.165);
+    o.boule(0.065, "peau", 0, 0.97, -0.165);
   }),
   corps("tenue-ninja", "Tenue de ninja", (o) => {
-    habille(o, "#1e2433");
+    habille(o, "peau-sombre");
     for (const s of [-1, 1])
-      o.box(0.045, 0.34, 0.006, "#475569", s * 0.07, 0.38, 0.2745, 0, 0, s * 0.45);
-    ceinture(o, "#dc2626", 0.25, 0.14);
-    o.box(0.07, 0.16, 0.025, "#dc2626", 0.08, 0.19, 0.29, 0, 0, 0.3);
+      o.box(0.045, 0.34, 0.006, "peau", s * 0.07, 0.38, 0.2745, 0, 0, s * 0.45);
+    ceinture(o, "peau", 0.25, 0.14);
+    o.box(0.07, 0.16, 0.025, "peau", 0.08, 0.19, 0.29, 0, 0, 0.3);
   }),
   main("shuriken", "Étoile de ninja", (m) => {
     const etoile = [];

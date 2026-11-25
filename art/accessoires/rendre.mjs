@@ -26,17 +26,17 @@ page.on("pageerror", (e) => {
   process.exitCode = 1;
 });
 
-async function rendre(pieces, vue) {
-  await page.goto(`${URL_ATELIER}?a=${pieces.join(",")}&v=${vue}`);
+async function rendre(pieces, vue, couleur = "FF4D6D") {
+  await page.goto(`${URL_ATELIER}?a=${pieces.join(",")}&v=${vue}&c=${couleur}`);
   await page.waitForFunction("window.catalogue", null, { timeout: 60000 });
   return page.screenshot({ omitBackground: true });
 }
 
 await rendre([], "face");
-const { ACCESSOIRES, TENUES, THEMES, THEMES_LOT1 } = await page.evaluate("window.catalogue");
+const { ACCESSOIRES, TENUES, THEMES, THEMES_LOT1, THEMES_LOT2 } = await page.evaluate("window.catalogue");
 
 // Un thème ne doit pas mettre deux accessoires au même emplacement : on le signale.
-for (const tenue of [...TENUES, ...THEMES, ...THEMES_LOT1]) {
+for (const tenue of [...TENUES, ...THEMES, ...THEMES_LOT1, ...THEMES_LOT2]) {
   const places = tenue.pieces.map((id) => ACCESSOIRES.find((a) => a.id === id)?.emplacement);
   if (places.includes(undefined) || new Set(places).size !== places.length) {
     console.error(`Tenue invalide : ${tenue.nom} (${places.join(", ")})`);
@@ -51,6 +51,7 @@ const groupes = [
   ["dos-tenues", "Dos, et premières tenues", [...de("dos"), ...TENUES]],
   ["themes", "Tenues par thème", THEMES],
   ["lot1", "Lot 1, ninja et pharaon refaits", THEMES_LOT1],
+  ["lot2", "Lot 2", THEMES_LOT2],
 ];
 
 for (const [fichier, titre, elements] of groupes.filter(([f]) => !process.env.LOT || f === process.env.LOT)) {
@@ -76,7 +77,7 @@ for (const [fichier, titre, elements] of groupes.filter(([f]) => !process.env.LO
 const total = ACCESSOIRES.length;
 // À la taille réelle du jeu sur téléphone : ce qui reste lisible une fois petit.
 const vignettes = [];
-for (const element of THEMES_LOT1) {
+for (const element of [...THEMES_LOT1, ...THEMES_LOT2]) {
   const png = await rendre(element.pieces ?? [element.id], "face");
   vignettes.push(`<figure><img width="64" src="data:image/png;base64,${png.toString("base64")}"><figcaption>${element.nom}</figcaption></figure>`);
 }
@@ -85,5 +86,16 @@ await petit.setContent(`<style>body{margin:0;padding:10px;background:#2e3643;col
   figure{margin:0;width:90px;text-align:center}</style>${vignettes.join("")}`);
 await petit.screenshot({ path: join(ICI, "planche-taille-reelle.png"), fullPage: true });
 
-console.log(`${total} accessoires, ${TENUES.length + THEMES.length + THEMES_LOT1.length} tenues rendus`);
+// Reconnaît-on encore le joueur ? Les lots vus de dos sur un canard cyan.
+const cyan = [];
+for (const element of [...THEMES_LOT1, ...THEMES_LOT2]) {
+  const png = await rendre(element.pieces, "dos", "00C2D1");
+  cyan.push(`<figure><img width="150" src="data:image/png;base64,${png.toString("base64")}"><figcaption>${element.nom}</figcaption></figure>`);
+}
+const controle = await navigateur.newPage({ viewport: { width: 1272, height: 200 } });
+await controle.setContent(`<style>body{margin:0;padding:10px;background:#0f1218;color:#f1f5f9;font:12px system-ui;display:flex;flex-wrap:wrap;gap:6px}
+  figure{margin:0;width:150px;text-align:center}</style>${cyan.join("")}`);
+await controle.screenshot({ path: join(ICI, "planche-couleur-joueur.png"), fullPage: true });
+
+console.log(`${total} accessoires, ${TENUES.length + THEMES.length + THEMES_LOT1.length + THEMES_LOT2.length} tenues rendus`);
 await navigateur.close();

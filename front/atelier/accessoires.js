@@ -12,11 +12,24 @@
 import * as T from "three";
 import { NOUVEAUX, THEMES } from "./themes.js";
 import { PIECES_LOT1, THEMES_LOT1 } from "./lot1.js";
+import { PIECES_LOT2, THEMES_LOT2 } from "./lot2.js";
 
+// Deux « couleurs » spéciales : celle DU canard, et la même assombrie. Une tenue
+// couvrante doit les utiliser largement : la couleur dit qui est qui en partie.
 const PEAU = "peau";
+const PEAU_SOMBRE = "peau-sombre";
 
 function outils(duck, groupe) {
-  const mat = (c, o = {}) => new T.MeshLambertMaterial({ color: c, ...o });
+  const peau = () => piece(0.15).material;
+  const teinte = (c) => {
+    if (c === PEAU) return peau().color;
+    if (c === PEAU_SOMBRE) return peau().color.clone().multiplyScalar(0.28);
+    return c;
+  };
+  const mat = (c, o = {}) =>
+    c === PEAU && Object.keys(o).length === 0
+      ? peau()
+      : new T.MeshLambertMaterial({ color: teinte(c), ...o });
   const add = (geo, m, x, y, z, rx = 0, ry = 0, rz = 0) => {
     const mesh = new T.Mesh(geo, m);
     mesh.position.set(x, y, z);
@@ -51,9 +64,7 @@ function outils(duck, groupe) {
   const forme = (points, c, z) => {
     const s = new T.Shape();
     points.forEach(([x, y], i) => (i ? s.lineTo(x, y) : s.moveTo(x, y)));
-    // Sans couleur : la matière du canard lui-même, quelle que soit sa couleur.
-    const matiere = c === PEAU ? piece(0.15).material : mat(c, { side: T.DoubleSide });
-    return add(new T.ShapeGeometry(s), matiere, 0, 0, z);
+    return add(new T.ShapeGeometry(s), mat(c, { side: T.DoubleSide }), 0, 0, z);
   };
   const piece = (y) =>
     duck.group.children.find(
@@ -100,7 +111,7 @@ function outils(duck, groupe) {
     s.quadraticCurveTo(-x, y0, -x + r, y0);
     return add(new T.ShapeGeometry(s), piece(0.15).material, 0, 0, z);
   };
-  return { mat, add, box, cyl, cone, boule, dome, tore, forme, habit, enMain, fenetre };
+  return { groupe, mat, add, box, cyl, cone, boule, dome, tore, forme, habit, enMain, fenetre };
 }
 
 const corps = (o, couleur, hauteur = 0.945) => o.habit(0.15, couleur, 1.065, hauteur, 1.05);
@@ -597,8 +608,8 @@ const PREMIERE_SERIE = [
 ];
 
 /** Tout le catalogue : un accessoire au plus par emplacement dans une tenue. */
-export const ACCESSOIRES = [...PREMIERE_SERIE, ...NOUVEAUX, ...PIECES_LOT1];
-export { THEMES, THEMES_LOT1 };
+export const ACCESSOIRES = [...PREMIERE_SERIE, ...NOUVEAUX, ...PIECES_LOT1, ...PIECES_LOT2];
+export { THEMES, THEMES_LOT1, THEMES_LOT2 };
 
 function monture(o, couleur) {
   for (const x of [-0.105, 0.105]) {
