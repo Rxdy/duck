@@ -13,6 +13,10 @@ import * as T from "three";
 import { NOUVEAUX, THEMES } from "./themes.js";
 import { PIECES_LOT1, THEMES_LOT1 } from "./lot1.js";
 import { PIECES_LOT2, THEMES_LOT2 } from "./lot2.js";
+import { PIECES_LOT3, THEMES_LOT3 } from "./lot3.js";
+import { PIECES_LOT4, THEMES_LOT4 } from "./lot4.js";
+import { PIECES_COACH } from "./coach.js";
+import { PIECES_LOT5, THEMES_LOT5 } from "./lot5.js";
 
 // Deux « couleurs » spéciales : celle DU canard, et la même assombrie. Une tenue
 // couvrante doit les utiliser largement : la couleur dit qui est qui en partie.
@@ -608,8 +612,18 @@ const PREMIERE_SERIE = [
 ];
 
 /** Tout le catalogue : un accessoire au plus par emplacement dans une tenue. */
-export const ACCESSOIRES = [...PREMIERE_SERIE, ...NOUVEAUX, ...PIECES_LOT1, ...PIECES_LOT2];
-export { THEMES, THEMES_LOT1, THEMES_LOT2 };
+export const ACCESSOIRES = [
+  ...PREMIERE_SERIE,
+  ...NOUVEAUX,
+  ...PIECES_LOT1,
+  ...PIECES_LOT2,
+  ...PIECES_LOT3,
+  ...PIECES_LOT4,
+  ...PIECES_LOT5,
+  // Réservés à Coincoin (`reserve`) : à exclure des lots à gagner.
+  ...PIECES_COACH,
+];
+export { THEMES, THEMES_LOT1, THEMES_LOT2, THEMES_LOT3, THEMES_LOT4, THEMES_LOT5 };
 
 function monture(o, couleur) {
   for (const x of [-0.105, 0.105]) {

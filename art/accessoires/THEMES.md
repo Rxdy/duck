@@ -1,4 +1,4 @@
-# Thèmes : 40 faits sur 80
+# Thèmes : 70 faits sur 90
 
 Objectif : 80 thèmes. Méthode : **lister, trier, produire par lots de 10** (planche face et dos à chaque lot), valider,
 puis intégrer au jeu quand le catalogue est assez fourni.
@@ -15,7 +15,7 @@ les formes plates, les petits objets, tout ce qui repose sur le visage.
 Règles : au plus un accessoire par emplacement (tête, visage, corps, dos, main) ; canard jamais modifié ; sa couleur doit
 rester visible ; aucun personnage, logo ni nom protégé.
 
-## Faits (40)
+## Faits (70)
 
 **Départ (18) :** chevalier, garde royal, roi, apprenti sorcier, grand mage, capitaine pirate, duel des étoiles,
 astronaute, viking, roi des mers, champion, vacances, nuit d'Halloween, réveillon, explorateur, cyber, chat de
@@ -28,6 +28,17 @@ gouttière, justicier.
 
 **Lot 2 (10, `lot2.js`) :** cuisinier (2), mineur (9), légionnaire (13), mousquetaire (14), homme des cavernes (16),
 diablotin (28), extraterrestre (32), basketteur (42), surfeur (46), lutin (52).
+
+**Lot 3 (10, `lot3.js`) :** policier (5), peintre (8), scaphandrier (20), nécromancien (26), ange (27), chasseur spatial
+(36), boxeur (43), tennis (44), skieur (45), Pâques (54).
+
+**Lot 4 (10, `lot4.js`) :** ouvrier (3), jardinier (7), dragon (21), momie (23), licorne (30), pixel rétro (40),
+skateur (50), anniversaire (55), abeille (56), coccinelle (57).
+
+**Lot 5 (10, `lot5.js`), nouvelles idées hors des tableaux :** détective, boulanger, clown, fantôme, grenouille, panda,
+yéti, renard, hot-dog, apiculteur.
+
+**Coincoin (`coach.js`) :** lunettes rondes, sifflet, baguette (une seule tenue, réservée, hors des lots à gagner).
 
 **Couleur du joueur (règle) :** une tenue couvrante reprend largement la couleur du canard (`"peau"` ou
 `"peau-sombre"` à la place d'une couleur). Contrôle à chaque lot : `planche-couleur-joueur.png`, les tenues vues de dos

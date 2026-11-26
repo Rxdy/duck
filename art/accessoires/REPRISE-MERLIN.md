@@ -21,11 +21,11 @@ node art/accessoires/rendre.mjs                                  # LOT=lot2 pour
 
 ## Où on en est
 
-- 123 accessoires, 5 emplacements (tête, visage, corps, dos, main), 40 thèmes sur 80 (`THEMES.md`).
+- 213 accessoires à gagner (+ 5 réservés à Coincoin), 5 emplacements, 70 thèmes sur 90 (`THEMES.md`).
 - Règle : une tenue couvrante garde largement la couleur du joueur (`"peau"`, `"peau-sombre"`) ; contrôle avec
   `planche-couleur-joueur.png`.
-- Prochaine étape : lot 3 (proposé, à valider) : policier, peintre, scaphandrier, nécromancien, ange, chasseur spatial,
-  boxeur, skieur, Pâques et un dixième au choix.
+- Casques fermés : le panneau `fenetre` doit rester à z = 0,262 pour ne pas cacher le blanc des yeux.
+- Lots 3, 4 et 5 produits (`planche-lot3.png` à `planche-lot5.png`), à valider.
 - À retoucher : couleur du joueur sur samouraï, rockeur et pharaon ; poêle du cuisinier ; ailes du diablotin. Les 18
   premiers thèmes n'ont pas encore été contrôlés sur la couleur.
 - L'issue « Accessoires » de `docs/reprise/issues.py` cite encore les chiffres du premier lot (27 accessoires).

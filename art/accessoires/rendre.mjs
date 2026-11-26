@@ -33,10 +33,10 @@ async function rendre(pieces, vue, couleur = "FF4D6D") {
 }
 
 await rendre([], "face");
-const { ACCESSOIRES, TENUES, THEMES, THEMES_LOT1, THEMES_LOT2 } = await page.evaluate("window.catalogue");
+const { ACCESSOIRES, TENUES, THEMES, THEMES_LOT1, THEMES_LOT2, THEMES_LOT3, THEMES_LOT4, THEMES_LOT5 } = await page.evaluate("window.catalogue");
 
 // Un thème ne doit pas mettre deux accessoires au même emplacement : on le signale.
-for (const tenue of [...TENUES, ...THEMES, ...THEMES_LOT1, ...THEMES_LOT2]) {
+for (const tenue of [...TENUES, ...THEMES, ...THEMES_LOT1, ...THEMES_LOT2, ...THEMES_LOT3, ...THEMES_LOT4, ...THEMES_LOT5]) {
   const places = tenue.pieces.map((id) => ACCESSOIRES.find((a) => a.id === id)?.emplacement);
   if (places.includes(undefined) || new Set(places).size !== places.length) {
     console.error(`Tenue invalide : ${tenue.nom} (${places.join(", ")})`);
@@ -52,6 +52,9 @@ const groupes = [
   ["themes", "Tenues par thème", THEMES],
   ["lot1", "Lot 1, ninja et pharaon refaits", THEMES_LOT1],
   ["lot2", "Lot 2", THEMES_LOT2],
+  ["lot3", "Lot 3", THEMES_LOT3],
+  ["lot4", "Lot 4", THEMES_LOT4],
+  ["lot5", "Lot 5 : nouvelles idées", THEMES_LOT5],
 ];
 
 for (const [fichier, titre, elements] of groupes.filter(([f]) => !process.env.LOT || f === process.env.LOT)) {
@@ -77,7 +80,7 @@ for (const [fichier, titre, elements] of groupes.filter(([f]) => !process.env.LO
 const total = ACCESSOIRES.length;
 // À la taille réelle du jeu sur téléphone : ce qui reste lisible une fois petit.
 const vignettes = [];
-for (const element of [...THEMES_LOT1, ...THEMES_LOT2]) {
+for (const element of [...THEMES_LOT1, ...THEMES_LOT2, ...THEMES_LOT3, ...THEMES_LOT4, ...THEMES_LOT5]) {
   const png = await rendre(element.pieces ?? [element.id], "face");
   vignettes.push(`<figure><img width="64" src="data:image/png;base64,${png.toString("base64")}"><figcaption>${element.nom}</figcaption></figure>`);
 }
@@ -88,7 +91,7 @@ await petit.screenshot({ path: join(ICI, "planche-taille-reelle.png"), fullPage:
 
 // Reconnaît-on encore le joueur ? Les lots vus de dos sur un canard cyan.
 const cyan = [];
-for (const element of [...THEMES_LOT1, ...THEMES_LOT2]) {
+for (const element of [...THEMES_LOT1, ...THEMES_LOT2, ...THEMES_LOT3, ...THEMES_LOT4, ...THEMES_LOT5]) {
   const png = await rendre(element.pieces, "dos", "00C2D1");
   cyan.push(`<figure><img width="150" src="data:image/png;base64,${png.toString("base64")}"><figcaption>${element.nom}</figcaption></figure>`);
 }
@@ -97,5 +100,5 @@ await controle.setContent(`<style>body{margin:0;padding:10px;background:#0f1218;
   figure{margin:0;width:150px;text-align:center}</style>${cyan.join("")}`);
 await controle.screenshot({ path: join(ICI, "planche-couleur-joueur.png"), fullPage: true });
 
-console.log(`${total} accessoires, ${TENUES.length + THEMES.length + THEMES_LOT1.length + THEMES_LOT2.length} tenues rendus`);
+console.log(`${total} accessoires, ${TENUES.length + THEMES.length + THEMES_LOT1.length + THEMES_LOT2.length + THEMES_LOT3.length + THEMES_LOT4.length + THEMES_LOT5.length} tenues rendus`);
 await navigateur.close();
