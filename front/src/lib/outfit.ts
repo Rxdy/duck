@@ -1,9 +1,11 @@
-import { Mesh, type Material } from "three";
+import { Mesh, type Material, type Object3D } from "three";
 import { habiller } from "./accessories/accessoires.js";
 import type { Coincoin } from "./coincoin.js";
 
 /** La tenue posée sur un canard : elle clignote avec lui et libère sa mémoire avec lui. */
 export interface Dressing {
+  /** Ce qui a été ajouté au canard. */
+  object: Object3D;
   setOpacity(opacity: number): void;
   dispose(): void;
 }
@@ -27,6 +29,7 @@ export function dress(duck: Coincoin, ids: readonly string[]): Dressing {
 
   let current = 1;
   return {
+    object: worn,
     setOpacity(opacity) {
       if (opacity === current) return;
       current = opacity;

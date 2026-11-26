@@ -55,7 +55,14 @@ onBeforeUnmount(() => {
       alt=""
       draggable="false"
       class="h-full w-full object-contain"
-      :class="locked ? 'opacity-[0.16] brightness-0 invert' : ''"
+      :class="locked ? 'opacity-[0.16] brightness-0 invert' : 'outlined'"
     />
   </span>
 </template>
+
+<style scoped>
+/* Un liseré clair : les pièces noires se détachent du fond sombre. */
+.outlined {
+  filter: drop-shadow(0 0 1px rgb(203 213 225 / 0.75));
+}
+</style>

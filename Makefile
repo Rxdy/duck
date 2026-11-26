@@ -28,7 +28,7 @@ COMPOSE := docker compose
 # l'utilisateur courant. On ne retient donc USER que passé en ligne de commande.
 ELO_USER := $(if $(filter command line,$(origin USER)),$(USER),)
 
-.PHONY: help install env dev dev-back dev-front lint lint-front lint-back \
+.PHONY: help poste install env dev dev-back dev-front lint lint-front lint-back \
         format format-fix typecheck typecheck-front typecheck-back \
         test test-front test-back build check \
         db-up db-down db-wait db-schema db-psql db-logs db-reset elo \
@@ -44,6 +44,9 @@ help: ## Affiche cette aide
 		END { printf "\n" }' $(MAKEFILE_LIST)
 
 ##@ Installation
+
+poste: ## Prépare un nouveau poste une fois pour toutes (identité Git, connexion GitHub, dépendances)
+	@scripts/configurer-poste.sh
 
 install: env ## Installe les dépendances de front/ et back/ (+ hooks Git)
 	cd back && npm install

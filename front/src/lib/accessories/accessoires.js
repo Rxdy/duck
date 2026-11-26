@@ -344,9 +344,27 @@ const PREMIERE_SERIE = [
     nom: "Cache-œil",
     emplacement: "visage",
     creer(o) {
-      o.cyl(0.095, 0.095, 0.025, "#111827", -0.1, 0.845, 0.29, Math.PI / 2);
-      o.habit(0.5, "#111827", 1.07, 0.05, 1.058, 0.38);
-      o.box(0.5, 0.036, 0.005, "#111827", 0, 0.895, 0.2645, 0, 0, -0.16);
+      // Le cache et son liseré, plus clair : sans lui il disparaît sur un fond sombre.
+      o.cyl(0.098, 0.098, 0.022, "#64748b", -0.108, 0.845, 0.282, Math.PI / 2);
+      o.cyl(0.082, 0.082, 0.024, "#1f2937", -0.108, 0.845, 0.288, Math.PI / 2);
+      // La sangle monte du cache en passant AU-DESSUS de l'œil ouvert (ses cils s'arrêtent à 0,935).
+      const sangle = (x0, y0, x1, y1) =>
+        o.box(
+          Math.hypot(x1 - x0, y1 - y0),
+          0.026,
+          0.012,
+          "#374151",
+          (x0 + x1) / 2,
+          (y0 + y1) / 2,
+          0.2685,
+          0,
+          0,
+          Math.atan2(y1 - y0, x1 - x0),
+        );
+      sangle(-0.12, 0.915, -0.02, 0.957);
+      sangle(-0.25, 0.87, -0.17, 0.85);
+      // Le tour de tête suit sa forme, juste au-dessus des cils.
+      o.habit(0.5, "#374151", 1.05, 0.052, 1.042, 0.445);
     },
   },
   {

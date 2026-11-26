@@ -5,7 +5,8 @@
 ```bash
 git clone https://github.com/Rxdy/duck.git && cd duck
 git switch fix/responsive
-make install && make dev     # Node 22 et Docker requis ; jeu sur http://localhost:5173
+make poste                   # UNE fois : identité Git, connexion GitHub, dépendances (Node 22 et Docker requis)
+make dev                     # jeu sur http://localhost:5173
 make check                   # tout ce que vérifie la CI (Postgres démarré par make)
 ```
 

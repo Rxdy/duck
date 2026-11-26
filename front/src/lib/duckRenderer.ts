@@ -12,10 +12,12 @@ import {
   Sprite,
   Vector3,
   WebGLRenderer,
+  type Material,
   type Object3D,
 } from "three";
 import { ANTENNA_COLORS, createCoincoin } from "./coincoin.js";
 import { dress } from "./outfit.js";
+import { accessoryById } from "./wardrobe.js";
 
 const THUMBNAIL_SIZE = 256;
 const DUCK_SIZE = 512;
@@ -87,6 +89,26 @@ function frame(camera: OrthographicCamera, subject: Object3D) {
   camera.updateProjectionMatrix();
 }
 
+/**
+ * Le canard devient invisible mais cache toujours ce qu'il cacherait : beaucoup de pièces sont des
+ * blocs pleins dont seul le tour dépasse (cordon de lunettes, ceinture, col). Sans lui, on verrait
+ * leur intérieur comme de la matière en trop.
+ */
+function makeInvisible(parts: readonly Object3D[]): Material[] {
+  const masks: Material[] = [];
+  for (const part of parts) {
+    if (part instanceof Sprite) part.visible = false;
+    if (!(part instanceof Mesh) || !part.visible) continue;
+    // Une copie : les pièces « couleur du canard » partagent le matériau d'origine, et doivent se voir.
+    const mask = (part.material as Material).clone();
+    mask.colorWrite = false;
+    part.material = mask;
+    part.renderOrder = -1;
+    masks.push(mask);
+  }
+  return masks;
+}
+
 interface Shot {
   color: string;
   outfit: readonly string[];
@@ -111,18 +133,19 @@ function picture({ color, outfit, size, alone = false, back = false }: Shot) {
   }
   const body = [...duck.group.children];
   const dressing = dress(duck, outfit);
-  // L'accessoire seul : on cache le canard et on garde ce qu'on vient d'ajouter.
-  if (alone) for (const child of body) child.visible = false;
+  const hidden = alone ? makeInvisible(body) : [];
   duck.group.rotation.y = back ? Math.PI : 0;
 
   room.scene.add(duck.group);
-  frame(room.camera, duck.group);
+  // L'accessoire seul se cadre sur lui, pas sur le canard invisible qui le porte.
+  frame(room.camera, alone ? dressing.object : duck.group);
   room.renderer.setSize(size, size, false);
   room.renderer.render(room.scene, room.camera);
   const url = room.renderer.domElement.toDataURL("image/png");
   room.scene.remove(duck.group);
   dressing.dispose();
   duck.dispose();
+  for (const material of hidden) material.dispose();
   cache.set(key, url);
   return url;
 }
@@ -130,5 +153,12 @@ function picture({ color, outfit, size, alone = false, back = false }: Shot) {
 export const renderDuck = (color: string, outfit: readonly string[], back = false) =>
   picture({ color, outfit, back, size: DUCK_SIZE });
 
+/** Un accessoire de dos se montre de dos : de face, le canard le masquerait. */
 export const renderAccessory = (id: string, color: string) =>
-  picture({ color, outfit: [id], alone: true, size: THUMBNAIL_SIZE });
+  picture({
+    color,
+    outfit: [id],
+    alone: true,
+    back: accessoryById(id)?.emplacement === "dos",
+    size: THUMBNAIL_SIZE,
+  });
