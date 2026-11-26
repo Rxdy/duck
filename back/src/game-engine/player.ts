@@ -5,9 +5,9 @@ export interface Player {
   id: PlayerId;
   name: string;
   color: string;
-  // Accessoire cosmétique équipé (voir back/src/skins.ts) : "none" pour un
-  // bot ou un joueur non connecté, qui n'ont pas de compte/skin.
-  accessory: string;
+  // Accessoires portés (voir back/src/wardrobe.ts) : vide pour un bot ou un
+  // joueur non connecté, qui n'ont pas de garde-robe.
+  outfit: string[];
   x: number;
   y: number;
   spawnX: number;

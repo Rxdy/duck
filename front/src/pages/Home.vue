@@ -1,21 +1,20 @@
 <script setup lang="ts">
 import MenuCard from "../components/molecules/MenuCard.vue";
+import DuckPortrait from "../components/atoms/DuckPortrait.vue";
+import { useWardrobeStore } from "../store/wardrobeStore.js";
 import { DUCK_GLOW, DUCK_IMAGES } from "../lib/ducks.js";
 import { useAuthStore } from "../store/authStore.js";
 
 const auth = useAuthStore();
+const wardrobe = useWardrobeStore();
 
-// « Jouer » domine, les trois destinations courantes suivent, et les deux
-// secondaires se partagent une ligne.
+// « Jouer » domine, les trois destinations courantes suivent. Le reste est dans le
+// menu du profil, en haut à droite.
 const menu = [
   { to: "/jouer", label: "Jouer", desc: "Duel ou FFA 4 joueurs" },
   { to: "/entrainement", label: "Camp d'entraînement" },
-  { to: "/creatif", label: "Créatif" },
+  { to: "/creatif", label: "Créatif", account: true },
   { to: "/classement", label: "Classement" },
-];
-const secondary = [
-  { to: "/options", label: "Options" },
-  { to: "/credits", label: "Crédits" },
 ];
 </script>
 
@@ -27,10 +26,9 @@ const secondary = [
     class="flex h-full flex-col items-center gap-4 overflow-y-auto px-4 py-4 text-center text-ink [justify-content:safe_center] tiny:gap-2 tiny:py-2 short:flex-row short:justify-center short:gap-8 short:py-2"
   >
     <div class="flex shrink-0 flex-col items-center gap-1 short:w-40">
-      <img
-        :src="DUCK_IMAGES.rouge"
-        alt=""
-        class="duck-glow h-28 w-28 object-contain tiny:h-16 tiny:w-16 sm:h-36 sm:w-36 short:h-28 short:w-28"
+      <DuckPortrait
+        :outfit="wardrobe.outfit"
+        class="duck-glow h-28 w-28 tiny:h-16 tiny:w-16 sm:h-32 sm:w-32 short:h-24 short:w-24"
         :style="{ '--duck-glow': DUCK_GLOW[DUCK_IMAGES.rouge] }"
       />
       <h1 class="text-3xl font-bold tiny:text-2xl">Duck</h1>
@@ -46,27 +44,12 @@ const secondary = [
           :key="item.to"
           :to="item.to"
           :label="item.label"
-          :description="item.desc"
+          :description="item.account && !auth.isLoggedIn ? 'Avec un compte' : item.desc"
           :primary="index === 0"
+          :locked="item.account && !auth.isLoggedIn"
           class="col-span-2"
         />
-        <MenuCard
-          v-for="item in secondary"
-          :key="item.to"
-          :to="item.to"
-          :label="item.label"
-          class="!text-center"
-        />
       </nav>
-
-      <!-- Rien pour un joueur connecté : son pseudo et la déconnexion vivent
-           dans le header, présent sur toutes les pages. Les répéter ici les
-           donnait à deux endroits différents pour la même action. -->
-      <p v-if="!auth.isLoggedIn" class="text-sm text-ink/50">
-        <RouterLink to="/inscription" class="text-cyan-400">S'inscrire</RouterLink>
-        ·
-        <RouterLink to="/connexion" class="text-ink/60">Se connecter</RouterLink>
-      </p>
     </div>
   </div>
 </template>

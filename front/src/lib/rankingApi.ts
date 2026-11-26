@@ -6,7 +6,10 @@ import { HTTP_URL } from "./serverUrl.js";
 export interface RankedPlayer {
   rank: number;
   username: string;
+  tag: string;
   rating: number;
+  /** Ce que porte son canard. */
+  outfit?: string[];
 }
 
 export interface Ranking {

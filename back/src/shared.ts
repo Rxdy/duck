@@ -24,6 +24,12 @@ export const GAME_MODES = { duel: 2, ffa4: 4 } as const;
 
 export type GameMode = keyof typeof GAME_MODES;
 
+/**
+ * Durée d'un pas : le temps que met la glissade à l'écran (GLIDE_MS dans front/src/lib/coincoin.ts,
+ * à garder égal). Personne n'avance plus vite : ni en martelant, ni avec un client modifié.
+ */
+export const STEP_MS = 180;
+
 /** Mode par défaut quand le client n'en transmet aucun (client plus ancien). */
 export const DEFAULT_GAME_MODE: GameMode = "duel";
 

@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import GoogleSignIn from "../components/molecules/GoogleSignIn.vue";
 import { computed, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
+import { LOCKED_REASONS } from "../lib/access.js";
 import PasswordStrength from "../components/molecules/PasswordStrength.vue";
 import { isPasswordAccepted } from "../lib/passwordStrength.js";
 import { useAuthStore } from "../store/authStore.js";
 
 const router = useRouter();
+const reason = LOCKED_REASONS[String(useRoute().query.raison)];
 const auth = useAuthStore();
 
 const username = ref("");
@@ -53,6 +55,10 @@ async function handleSubmit() {
     class="mx-auto flex h-full max-w-sm flex-col gap-4 overflow-y-auto px-4 py-6 [justify-content:safe_center]"
   >
     <h1 class="text-2xl font-bold">S'inscrire</h1>
+    <p class="text-sm text-ink/70">
+      <strong v-if="reason" class="block text-ink">{{ reason }}</strong>
+      Tes parties jouées en invité sur cet appareil sont conservées.
+    </p>
 
     <form class="flex flex-col gap-3" @submit.prevent="handleSubmit">
       <input

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Direction } from "../../types.js";
+import { createChordGuard } from "../../lib/chordGuard.js";
 
 const props = withDefaults(
   // `hint` : le bouton à allumer, les autres s'effacent (camp d'entraînement).
@@ -38,7 +39,10 @@ const BUTTONS: { direction: Direction; icon: string; label: string; place: strin
 ];
 
 // Au contact et non au relâchement : chaque milliseconde compte en partie.
-function press(direction: Direction) {
+const guard = createChordGuard();
+function press(direction: Direction, pointer?: number) {
+  // Deux doigts ensemble ne font pas une diagonale.
+  if (pointer !== undefined && !guard.press(pointer, performance.now())) return;
   emit("move", direction);
   if (props.hapticsEnabled) navigator.vibrate?.(15);
 }
@@ -53,7 +57,10 @@ function press(direction: Direction) {
     :aria-label="button.label"
     class="flex h-20 touch-none select-none items-center justify-center panel rounded-2xl text-4xl text-ink/80 active:scale-95 active:!bg-cyan-500 active:text-slate-950 short:h-auto"
     :class="[button.place, hint === button.direction ? 'pad-hint' : hint ? 'opacity-40' : '']"
-    @pointerdown.prevent="press(button.direction)"
+    @pointerdown.prevent="press(button.direction, $event.pointerId)"
+    @pointerup="guard.release($event.pointerId)"
+    @pointercancel="guard.release($event.pointerId)"
+    @pointerleave="guard.release($event.pointerId)"
     @contextmenu.prevent
     @keydown.enter="press(button.direction)"
   >

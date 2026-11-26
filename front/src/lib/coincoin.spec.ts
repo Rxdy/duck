@@ -29,7 +29,8 @@ describe("antennes", () => {
 
 describe("mouvement", () => {
   it("adoucit le départ et l'arrivée", () => {
-    expect([easeInOut(0), easeInOut(0.5), easeInOut(1)]).toEqual([0, 0.5, 1]);
+    expect([easeInOut(0), easeInOut(1)]).toEqual([0, 1]);
+    expect(easeInOut(0.5)).toBeCloseTo(0.5);
     expect(easeInOut(0.1)).toBeLessThan(0.1);
     expect(easeInOut(0.9)).toBeGreaterThan(0.9);
   });

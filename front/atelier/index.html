@@ -1,0 +1,61 @@
+<!doctype html>
+<!-- Atelier : /atelier/?a=chantier,gilet&v=dos&c=FF4D6D — pas inclus dans le build du jeu. -->
+<html lang="fr">
+  <body style="margin: 0; background: transparent">
+    <script type="module">
+      import * as T from "three";
+      import { createCoincoin } from "/src/lib/coincoin.ts";
+      import {
+        ACCESSOIRES,
+        TENUES,
+        THEMES,
+        THEMES_LOT1,
+        THEMES_LOT2,
+        THEMES_LOT3,
+        THEMES_LOT4,
+        THEMES_LOT5,
+        habiller,
+      } from "/src/lib/accessories/accessoires.js";
+
+      const q = new URLSearchParams(location.search);
+      const renderer = new T.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        preserveDrawingBuffer: true,
+      });
+      renderer.setSize(360, 360);
+      document.body.append(renderer.domElement);
+      const scene = new T.Scene();
+      scene.add(new T.HemisphereLight(0xffffff, 0x9a9690, 2.0));
+      const sun = new T.DirectionalLight(0xffffff, 1.6);
+      sun.position.set(-1, 6, 5);
+      scene.add(sun);
+
+      const duck = createCoincoin("#" + (q.get("c") ?? "FF4D6D"));
+      duck.setAntennaColor("#ffe23a");
+      // Les rendus se lisent mieux sans la lueur au sol ni l'aura.
+      for (const o of duck.group.children) {
+        if (o.geometry?.type === "PlaneGeometry" || (o.isSprite && o.scale.x > 1))
+          o.visible = false;
+      }
+      habiller(duck, (q.get("a") ?? "").split(",").filter(Boolean));
+      duck.group.rotation.y = q.get("v") === "dos" ? Math.PI - 0.12 : -0.12;
+      scene.add(duck.group);
+
+      const camera = new T.OrthographicCamera(-0.9, 0.9, 0.9, -0.9, 0.1, 50);
+      camera.position.set(2.2, 2.6, 6);
+      camera.lookAt(0, 0.72, 0);
+      renderer.render(scene, camera);
+      window.catalogue = {
+        ACCESSOIRES: ACCESSOIRES.map(({ id, nom, emplacement }) => ({ id, nom, emplacement })),
+        TENUES,
+        THEMES,
+        THEMES_LOT1,
+        THEMES_LOT2,
+        THEMES_LOT3,
+        THEMES_LOT4,
+        THEMES_LOT5,
+      };
+    </script>
+  </body>
+</html>

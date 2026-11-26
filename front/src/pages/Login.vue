@@ -7,7 +7,7 @@ import { useAuthStore } from "../store/authStore.js";
 const router = useRouter();
 const auth = useAuthStore();
 
-const identifier = ref("");
+const email = ref("");
 const password = ref("");
 const error = ref<string | null>(null);
 const submitting = ref(false);
@@ -15,7 +15,7 @@ const submitting = ref(false);
 async function handleSubmit() {
   error.value = null;
   submitting.value = true;
-  const failure = await auth.login(identifier.value, password.value);
+  const failure = await auth.login(email.value, password.value);
   submitting.value = false;
 
   if (failure) {
@@ -34,11 +34,11 @@ async function handleSubmit() {
 
     <form class="flex flex-col gap-3" @submit.prevent="handleSubmit">
       <input
-        v-model="identifier"
-        type="text"
+        v-model="email"
+        type="email"
         required
-        placeholder="Email ou pseudo"
-        autocomplete="username"
+        placeholder="Email"
+        autocomplete="email"
         class="rounded-lg border border-ink/10 bg-ink/10 px-3 py-2 text-sm text-ink placeholder:text-ink/40"
       />
       <input

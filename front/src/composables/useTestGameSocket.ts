@@ -11,6 +11,7 @@ import {
   stopAmbientLoop,
 } from "../lib/audio.js";
 import { WS_URL } from "../lib/serverUrl.js";
+import { loadSession } from "../lib/session.js";
 
 /**
  * Comme useGameSocket, mais rejoint une partie d'entraînement solo sur une
@@ -28,6 +29,7 @@ export function useTestGameSocket(map: EditorMap) {
     socket.addEventListener("open", () => {
       send(socket!, {
         type: "JOIN_TEST",
+        token: loadSession()?.token,
         map: {
           width: map.width,
           height: map.height,

@@ -2,7 +2,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { randomUUID } from "node:crypto";
 import { WebSocketServer, type WebSocket } from "ws";
 import { isOriginAllowed, parseAllowedOrigins } from "./origins.js";
-import type { ClientMessage, ServerMessage } from "./protocol.js";
+import type { ClientMessage, JoinTestMessage, ServerMessage } from "./protocol.js";
+import { ACCOUNT_REQUIRED, isAllowed } from "./access.js";
 import { parseClientMessage } from "./clientMessage.js";
 import { buildMapFromWire, parseWireSpawns } from "./mapWire.js";
 import { GameRoom, type MatchContext } from "./room.js";
@@ -22,12 +23,21 @@ import {
   getAccountIdForToken,
   loginAccount,
   registerAccount,
-  UsernameOrEmailAlreadyUsedError,
+  EmailAlreadyUsedError,
   validateCredentials,
   loginWithGoogle,
+  anonIdForAccount,
 } from "./auth.js";
 import { verifyGoogleCredential } from "./google.js";
-import { equipSkin, getEquippedAccessory, listOwnedSkins } from "./skins.js";
+import {
+  CATALOG,
+  dressBots,
+  getOutfit,
+  getWardrobe,
+  giveRandomItem,
+  savePreset,
+  wearOutfit,
+} from "./wardrobe.js";
 import { deleteMapForAccount, listMapsForAccount, saveMapForAccount } from "./maps.js";
 import {
   applyMatchRatings,
@@ -39,6 +49,15 @@ import { ensureBotPopulation, pickBotOpponents } from "./botAccounts.js";
 import { DEFAULT_GAME_MODE, isGameMode, playerCountFor, type GameMode } from "./shared.js";
 import { BOT_LEVELS, DEFAULT_BOT_LEVEL, isBotLevel, type BotLevel } from "./bots.js";
 import { COUNTDOWN_MS, Matchmaker } from "./matchmaking.js";
+import { LobbyRegistry } from "./lobby.js";
+import {
+  acceptFriend,
+  listFriends,
+  removeFriend,
+  requestFriend,
+  findByCode,
+  friendByCode,
+} from "./friends.js";
 
 const PORT = Number(process.env.PORT ?? 8080);
 
@@ -71,6 +90,17 @@ function bearerToken(req: IncomingMessage): string | undefined {
   return header.slice("Bearer ".length);
 }
 
+function sendJson(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { "content-type": "application/json" });
+  res.end(JSON.stringify(body));
+}
+
+const FRIEND_ACTIONS: Record<string, (accountId: string, tag: string) => Promise<unknown>> = {
+  "/me/friends": requestFriend,
+  "/me/friends/accept": acceptFriend,
+  "/me/friends/remove": removeFriend,
+};
+
 const allowedOrigins = parseAllowedOrigins(process.env.ALLOWED_ORIGINS);
 // Non défini : la connexion avec Google est désactivée, le front masque son bouton.
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || undefined;
@@ -92,7 +122,7 @@ const httpServer = createServer((req, res) => {
 
   if (req.method === "OPTIONS") {
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    // "authorization" : requis par GET /me et GET /me/skins (token de
+    // "authorization" : requis par GET /me et les routes /me/* (token de
     // session en Bearer), sans quoi le préflight du navigateur refuse la
     // vraie requête avant même qu'elle ne parte.
     res.setHeader("Access-Control-Allow-Headers", "content-type, authorization");
@@ -185,6 +215,83 @@ const httpServer = createServer((req, res) => {
       const deleted = await deleteMapForAccount(accountId, mapId);
       res.writeHead(deleted ? 204 : 404);
       res.end();
+    });
+    return;
+  }
+
+  // Amis : tout demande un compte (voir friends.ts).
+  const url = new URL(req.url ?? "/", "http://localhost");
+  if (url.pathname === "/me/players" && req.method === "GET") {
+    withAccount(req, res, async (accountId) => {
+      sendJson(res, 200, {
+        players: await findByCode(accountId, url.searchParams.get("code") ?? ""),
+      });
+    });
+    return;
+  }
+  if (url.pathname === "/me/friends" && req.method === "GET") {
+    withAccount(req, res, async (accountId) => sendJson(res, 200, await listFriends(accountId)));
+    return;
+  }
+  // Le code joueur voyage dans le corps de la requête, jamais dans l'adresse.
+  const friendAction = FRIEND_ACTIONS[url.pathname];
+  if (friendAction && req.method === "POST") {
+    withAccount(req, res, async (accountId) => {
+      const payload = (await readJsonBody(req).catch(() => null)) as { tag?: unknown } | null;
+      if (typeof payload?.tag !== "string") return sendJson(res, 400, {});
+      sendJson(res, 200, { outcome: await friendAction(accountId, payload.tag) });
+    });
+    return;
+  }
+
+  // Invitations en attente dans un salon (voir lobby.ts), que le front interroge.
+  if (url.pathname === "/me/invites" && req.method === "GET") {
+    withAccount(req, res, async (accountId) =>
+      sendJson(res, 200, { invites: lobbies.invitesFor(accountId) }),
+    );
+    return;
+  }
+  if (url.pathname === "/me/invites/decline" && req.method === "POST") {
+    withAccount(req, res, async (accountId) => {
+      const payload = (await readJsonBody(req).catch(() => null)) as { code?: unknown } | null;
+      if (typeof payload?.code !== "string") return sendJson(res, 400, {});
+      lobbies.decline(accountId, payload.code);
+      sendJson(res, 200, {});
+    });
+    return;
+  }
+
+  // Garde-robe (voir wardrobe.ts) : ce qu'on possède, ce qu'on porte, les cadeaux.
+  if (url.pathname === "/me/wardrobe" && req.method === "GET") {
+    withAccount(req, res, async (accountId) => {
+      sendJson(res, 200, { ...(await getWardrobe(accountId)), total: CATALOG.length });
+    });
+    return;
+  }
+  // Porter et enregistrer sont deux gestes distincts.
+  if (url.pathname === "/me/outfit" && req.method === "POST") {
+    withAccount(req, res, async (accountId) => {
+      const payload = (await readJsonBody(req).catch(() => null)) as { outfit?: unknown } | null;
+      sendJson(res, (await wearOutfit(accountId, payload?.outfit)) ? 200 : 400, {});
+    });
+    return;
+  }
+  if (url.pathname === "/me/presets" && req.method === "POST") {
+    withAccount(req, res, async (accountId) => {
+      const payload = (await readJsonBody(req).catch(() => null)) as {
+        preset?: unknown;
+        outfit?: unknown;
+      } | null;
+      const saved = await savePreset(accountId, payload?.preset, payload?.outfit);
+      sendJson(res, saved ? 200 : 400, {});
+    });
+    return;
+  }
+  // La fin du tutoriel n'est pas vérifiable ici (il se joue dans le navigateur) : le risque se limite
+  // à ce cadeau, donné une seule fois par compte.
+  if (url.pathname === "/me/gifts/tutorial" && req.method === "POST") {
+    withAccount(req, res, async (accountId) => {
+      sendJson(res, 200, { item: (await giveRandomItem(accountId, "tutorial")) ?? null });
     });
     return;
   }
@@ -295,14 +402,9 @@ const httpServer = createServer((req, res) => {
           res.writeHead(201, { "content-type": "application/json" });
           res.end(JSON.stringify(result));
         } catch (error) {
-          if (error instanceof UsernameOrEmailAlreadyUsedError) {
+          if (error instanceof EmailAlreadyUsedError) {
             res.writeHead(409, { "content-type": "application/json" });
-            const message =
-              error.field === "email"
-                ? "Cette adresse email a déjà un compte."
-                : error.field === "username"
-                  ? "Ce pseudo est déjà pris."
-                  : "Ce pseudo ou cette adresse email est déjà utilisé.";
+            const message = "Cette adresse email a déjà un compte.";
             res.end(JSON.stringify({ error: message }));
             return;
           }
@@ -322,20 +424,18 @@ const httpServer = createServer((req, res) => {
   if (req.url === "/auth/login" && req.method === "POST") {
     readJsonBody(req).then(
       async (payload) => {
-        // Le pseudo et l'email sont tous les deux uniques (voir
-        // registerAccount) : l'un ou l'autre est accepté pour se connecter.
-        const { identifier, password } = payload as { identifier?: unknown; password?: unknown };
-        if (typeof identifier !== "string" || typeof password !== "string") {
+        const { email, password } = payload as { email?: unknown; password?: unknown };
+        if (typeof email !== "string" || typeof password !== "string") {
           res.writeHead(400);
           res.end();
           return;
         }
 
         try {
-          const result = await loginAccount(identifier, password);
+          const result = await loginAccount(email, password);
           if (!result) {
             res.writeHead(401, { "content-type": "application/json" });
-            res.end(JSON.stringify({ error: "Identifiant ou mot de passe incorrect." }));
+            res.end(JSON.stringify({ error: "Email ou mot de passe incorrect." }));
             return;
           }
           res.writeHead(200, { "content-type": "application/json" });
@@ -371,7 +471,8 @@ const httpServer = createServer((req, res) => {
         }
         const stats = account.anonId ? await getMatchStats(account.anonId) : { played: 0, won: 0 };
         res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify({ username: account.username, email: account.email, stats }));
+        const { username, tag, email } = account;
+        res.end(JSON.stringify({ username, tag, email, stats }));
       })
       .catch((error: unknown) => {
         console.error("Échec de la récupération du compte :", error);
@@ -409,76 +510,6 @@ const httpServer = createServer((req, res) => {
         res.writeHead(500);
         res.end();
       });
-    return;
-  }
-
-  if (req.url === "/me/skins" && req.method === "GET") {
-    const token = bearerToken(req);
-    if (!token) {
-      res.writeHead(401);
-      res.end();
-      return;
-    }
-    getAccountIdForToken(token)
-      .then(async (accountId) => {
-        if (!accountId) {
-          res.writeHead(401);
-          res.end();
-          return;
-        }
-        const owned = await listOwnedSkins(accountId);
-        res.writeHead(200, { "content-type": "application/json" });
-        res.end(JSON.stringify(owned));
-      })
-      .catch((error: unknown) => {
-        console.error("Échec de la récupération des skins :", error);
-        res.writeHead(500);
-        res.end();
-      });
-    return;
-  }
-
-  if (req.url === "/me/equip-skin" && req.method === "POST") {
-    const token = bearerToken(req);
-    if (!token) {
-      res.writeHead(401);
-      res.end();
-      return;
-    }
-    readJsonBody(req).then(
-      async (payload) => {
-        const { skinId } = payload as { skinId?: unknown };
-        if (typeof skinId !== "string") {
-          res.writeHead(400);
-          res.end();
-          return;
-        }
-        try {
-          const accountId = await getAccountIdForToken(token);
-          if (!accountId) {
-            res.writeHead(401);
-            res.end();
-            return;
-          }
-          const equipped = await equipSkin(accountId, skinId);
-          if (!equipped) {
-            res.writeHead(403, { "content-type": "application/json" });
-            res.end(JSON.stringify({ error: "Ce skin n'est pas possédé par ce compte." }));
-            return;
-          }
-          res.writeHead(200);
-          res.end();
-        } catch (error) {
-          console.error("Échec du changement de skin :", error);
-          res.writeHead(500);
-          res.end();
-        }
-      },
-      () => {
-        res.writeHead(400);
-        res.end();
-      },
-    );
     return;
   }
 
@@ -539,7 +570,7 @@ async function fillWithBots(room: GameRoom, rating: number, botLevel: BotLevel):
       // Le niveau de jeu vient du COMPTE du bot, pas de son classement (voir
       // botAccounts.ts#levelOf) : son classement bouge avec ses résultats, son
       // intelligence non.
-      room.addBot(randomUUID(), bot.username, bot.level, bot.anonId);
+      room.addBot(randomUUID(), bot.username, bot.level, bot.anonId, bot.outfit);
     } else {
       // Base injoignable : on complète quand même la partie plutôt que de
       // laisser le joueur seul sur le plateau.
@@ -580,15 +611,105 @@ function withAccount(
     });
 }
 
-/** "none" si pas connecté (pas de token) ou session invalide — jamais d'échec bloquant. */
-async function resolveAccessory(token?: string): Promise<string> {
-  if (!token) return "none";
-  const accountId = await getAccountIdForToken(token);
-  return accountId ? getEquippedAccessory(accountId) : "none";
+/**
+ * Qui joue : le compte derrière le token s'il est valide, sinon un invité.
+ * Les parties d'un compte sont enregistrées sous SON identifiant, pas sous
+ * celui qu'envoie le navigateur.
+ */
+async function resolvePlayer(
+  guestAnonId: string,
+  token?: string,
+): Promise<{ signedIn: boolean; anonId: string; outfit: string[] }> {
+  const accountId = token ? await getAccountIdForToken(token) : undefined;
+  if (!accountId) return { signedIn: false, anonId: guestAnonId, outfit: [] };
+  return {
+    signedIn: true,
+    anonId: await anonIdForAccount(accountId),
+    outfit: await getOutfit(accountId),
+  };
 }
+
+/** La connexion de chaque joueur de salon apprend ainsi dans quelle salle il joue. */
+const roomEntries = new Map<string, { socket: WebSocket; enter: (room: GameRoom) => void }>();
+
+/** Lance la partie d'un salon : une salle sans enregistrement ni classement. */
+const lobbies = new LobbyRegistry(({ mode, players, bots, botLevel, onEnd }) => {
+  const official = pickRandomOfficialMap(playerCountFor(mode));
+  if (!official) return undefined;
+  const id = `lobby-${randomUUID()}`;
+  const room = new GameRoom(
+    id,
+    official.map,
+    official.spawns,
+    WIN_SCORE,
+    {
+      mapName: official.name,
+      mode,
+      // Rien n'est enregistré. Différé d'un tour : le message de fin de partie
+      // doit arriver avant la réouverture du salon.
+      onEnd: () =>
+        queueMicrotask(() => {
+          rooms.delete(id);
+          onEnd();
+        }),
+    },
+    official.spawns.length,
+  );
+  rooms.set(id, room);
+  // Tant que tout le monde n'est pas assis, personne ne joue et le décompte n'a pas commencé.
+  room.openForWaiting(Date.now());
+  for (const player of players) {
+    const entry = roomEntries.get(player.playerId);
+    if (!entry) continue;
+    entry.enter(room);
+    // La carte d'abord : le client la pose avant le premier état.
+    player.send({ ...room.getMapMessage(), you: player.playerId });
+    room.join(player.playerId, player.username, entry.socket, undefined, player.outfit);
+  }
+  for (let i = 1; i <= bots; i++) {
+    room.addBot(randomUUID(), `${BOT_LEVELS[botLevel].label} ${i}`, botLevel);
+  }
+  room.start(COUNTDOWN_MS);
+  return {
+    leave: (playerId) => {
+      room.leave(playerId);
+      if (room.humanCount === 0) rooms.delete(id);
+    },
+  };
+});
 
 wss.on("connection", (socket: WebSocket) => {
   const playerId = randomUUID();
+  const send = (message: ServerMessage) => socket.send(JSON.stringify(message));
+  roomEntries.set(playerId, { socket, enter: (room) => (currentRoom = room) });
+
+  /** Crée ou rejoint un salon : réservé aux comptes. */
+  async function enterLobby(
+    message: Extract<ClientMessage, { type: "LOBBY_CREATE" | "LOBBY_JOIN" }>,
+  ): Promise<void> {
+    const accountId = await getAccountIdForToken(message.token);
+    const account = accountId ? await getAccountById(accountId) : undefined;
+    if (!accountId || !account) return send({ type: "LOBBY_CLOSED", reason: ACCOUNT_REQUIRED });
+    const outfit = await getOutfit(accountId);
+    // La connexion a pu se fermer pendant les lectures : pas de joueur fantôme.
+    if (socket.readyState !== socket.OPEN) return;
+    const player = {
+      playerId,
+      accountId,
+      username: account.username,
+      tag: account.tag,
+      outfit,
+      send,
+    };
+    lobbyAccount = accountId;
+    if (message.type === "LOBBY_CREATE") {
+      lobbies.create(player, message.mode);
+      return;
+    }
+    const refusal = lobbies.join(player, message.code);
+    if (refusal) send({ type: "LOBBY_CLOSED", reason: refusal });
+  }
+  let lobbyAccount: string | undefined;
   let currentRoom: GameRoom | null = null;
   let currentRoomId: string | null = null;
   // Mode de la salle rejointe : c'est la clé sous laquelle le matchmaker la
@@ -603,16 +724,21 @@ wss.on("connection", (socket: WebSocket) => {
       // matchmaking.ts). C'est ce qui fait se rencontrer deux joueurs qui
       // cliquent en même temps — avant, chaque JOIN créait sa propre salle
       // privée et tout le monde jouait seul contre des bots.
-      resolveAccessory(message.token)
-        .then(async (accessory) => {
+      resolvePlayer(message.anonId, message.token)
+        .then(async ({ signedIn, anonId, outfit }) => {
           const mode = isGameMode(message.mode) ? message.mode : DEFAULT_GAME_MODE;
+          if (!isAllowed(mode, signedIn)) {
+            const error: ServerMessage = { type: "ERROR", message: ACCOUNT_REQUIRED };
+            socket.send(JSON.stringify(error));
+            return;
+          }
 
           const open = matchmaker.find(mode);
           if (open) {
             currentRoom = open;
             currentRoomId = open.id;
             currentMode = mode;
-            open.join(playerId, message.name, socket, message.anonId, accessory);
+            open.join(playerId, message.name, socket, anonId, outfit);
             socket.send(JSON.stringify({ ...open.getMapMessage(), you: playerId }));
             // Cette arrivée a peut-être complété la salle : elle part alors
             // sans attendre la fin du délai.
@@ -626,9 +752,7 @@ wss.on("connection", (socket: WebSocket) => {
           const botLevel = isBotLevel(message.botLevel) ? message.botLevel : DEFAULT_BOT_LEVEL;
           // Le classement du joueur guide le choix des adversaires. Inconnu
           // (pas de compte) -> valeur de départ, donc des bots de niveau moyen.
-          const playerRating = await getRatingForAnonId(message.anonId).catch(
-            () => STARTING_RATING,
-          );
+          const playerRating = await getRatingForAnonId(anonId).catch(() => STARTING_RATING);
           const playerCount = playerCountFor(mode);
           const official = pickRandomOfficialMap(playerCount);
 
@@ -668,7 +792,7 @@ wss.on("connection", (socket: WebSocket) => {
           // arrivant reçoit un WAITING sans échéance, puis plus rien jusqu'au
           // départ — un compte à rebours qui commence à un chiffre inconnu.
           matchmaker.hold(mode, room, () => fillWithBots(room, playerRating, botLevel));
-          room.join(playerId, message.name, socket, message.anonId, accessory);
+          room.join(playerId, message.name, socket, anonId, outfit);
           socket.send(JSON.stringify({ ...room.getMapMessage(), you: playerId }));
           // Un mode à une seule place partirait immédiatement : il n'y a
           // personne à attendre. Aucun mode n'est dans ce cas aujourd'hui
@@ -682,27 +806,58 @@ wss.on("connection", (socket: WebSocket) => {
       return;
     }
 
+    // Tester une carte, c'est le créatif : réservé aux comptes.
     if (message.type === "JOIN_TEST") {
-      currentRoomId = `test-${randomUUID()}`;
-      const map = buildMapFromWire(message.map);
-      const spawns = parseWireSpawns(message.map.spawns, map);
-      currentRoom = new GameRoom(currentRoomId, map, spawns);
-      rooms.set(currentRoomId, currentRoom);
-      currentRoom.join(playerId, "Testeur", socket);
+      resolvePlayer("", message.token)
+        .then(({ signedIn }) => {
+          if (signedIn) return startTest(message);
+          const error: ServerMessage = { type: "ERROR", message: ACCOUNT_REQUIRED };
+          socket.send(JSON.stringify(error));
+        })
+        .catch((error: unknown) => {
+          console.error("Échec du JOIN_TEST :", error);
+        });
+      return;
+    }
 
-      // Un bot par spawn restant (le joueur a déjà pris le premier) : 2
-      // spawns posés -> 1 bot, 4 spawns posés -> 3 bots.
-      for (let i = 1; i < spawns.length; i++) {
-        currentRoom.addBot(randomUUID(), `Bot ${i}`);
-      }
-      currentRoom.startCountdown(COUNTDOWN_MS);
-      // Pas de mise en attente : l'entraînement se joue seul contre des bots,
-      // sur sa propre carte, et n'est jamais partagé. Il n'a personne à
-      // attendre, donc il joue dès maintenant (voir room.ts#openForWaiting).
+    if (message.type === "LOBBY_CREATE" || message.type === "LOBBY_JOIN") {
+      enterLobby(message).catch((error: unknown) => {
+        console.error("Échec de l'entrée au salon :", error);
+      });
+      return;
+    }
+    if (message.type === "LOBBY_SETTINGS") return lobbies.configure(playerId, message);
+    if (message.type === "LOBBY_START") return lobbies.start(playerId);
+    if (message.type === "LOBBY_INVITE") {
+      if (!lobbyAccount) return;
+      friendByCode(lobbyAccount, message.tag)
+        .then((friend) => friend && lobbies.invite(playerId, friend))
+        .catch((error: unknown) => {
+          console.error("Échec de l'invitation :", error);
+        });
       return;
     }
 
     currentRoom?.handle(playerId, message);
+  }
+
+  function startTest(message: JoinTestMessage): void {
+    currentRoomId = `test-${randomUUID()}`;
+    const map = buildMapFromWire(message.map);
+    const spawns = parseWireSpawns(message.map.spawns, map);
+    currentRoom = new GameRoom(currentRoomId, map, spawns);
+    rooms.set(currentRoomId, currentRoom);
+    currentRoom.join(playerId, "Testeur", socket);
+
+    // Un bot par spawn restant (le joueur a déjà pris le premier) : 2
+    // spawns posés -> 1 bot, 4 spawns posés -> 3 bots.
+    for (let i = 1; i < spawns.length; i++) {
+      currentRoom.addBot(randomUUID(), `Bot ${i}`);
+    }
+    currentRoom.startCountdown(COUNTDOWN_MS);
+    // Pas de mise en attente : l'entraînement se joue seul contre des bots,
+    // sur sa propre carte, et n'est jamais partagé. Il n'a personne à
+    // attendre, donc il joue dès maintenant (voir room.ts#openForWaiting).
   }
 
   socket.on("message", (raw) => {
@@ -731,6 +886,8 @@ wss.on("connection", (socket: WebSocket) => {
   });
 
   socket.on("close", () => {
+    roomEntries.delete(playerId);
+    lobbies.leave(playerId);
     if (!currentRoom) return;
     currentRoom.leave(playerId);
 
@@ -755,8 +912,10 @@ httpServer.listen(PORT, () => {
   // Peuple la table de bots si elle ne l'est pas encore (idempotent). Sans
   // eux, un joueur seul n'a personne en face — et l'application a l'air vide.
   ensureBotPopulation()
-    .then((created) => {
+    .then(async (created) => {
       if (created > 0) console.log(`${created} bots créés`);
+      const dressed = await dressBots();
+      if (dressed > 0) console.log(`${dressed} bots habillés`);
     })
     .catch((error: unknown) => {
       console.error("Peuplement des bots impossible :", error);

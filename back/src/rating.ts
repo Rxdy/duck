@@ -1,6 +1,7 @@
 import { eq, inArray, sql } from "drizzle-orm";
 import { db } from "./db.js";
-import { accounts } from "./schema.js";
+import { accounts, matches } from "./schema.js";
+import { publicOutfit } from "./catalog.js";
 import type { MatchResult } from "./db.js";
 
 /**
@@ -116,10 +117,52 @@ export async function applyMatchRatings(result: MatchResult): Promise<void> {
   );
 }
 
+/**
+ * Classement qu'un invité aurait atteint avec les parties jouées avant son
+ * inscription, rejouées dans l'ordre. Le classement de ses adversaires à
+ * l'époque n'est pas conservé : on prend l'actuel, et on ne le modifie pas.
+ */
+export async function replayRating(anonId: string): Promise<number> {
+  const played = await db
+    .select({ players: matches.players })
+    .from(matches)
+    .where(sql`${matches.players} @> ${JSON.stringify([{ anonId }])}::jsonb`)
+    .orderBy(matches.playedAt);
+  if (played.length === 0) return STARTING_RATING;
+
+  const results = played.map((row) => row.players as MatchResult["players"]);
+  const opponentIds = [
+    ...new Set(
+      results
+        .flat()
+        .map((p) => p.anonId)
+        .filter((id): id is string => typeof id === "string" && id !== anonId),
+    ),
+  ];
+  const rows = opponentIds.length
+    ? await db.select().from(accounts).where(inArray(accounts.anonId, opponentIds))
+    : [];
+  const opponents = new Map(rows.map((account) => [account.anonId, account]));
+
+  return results.reduce((rating, players) => {
+    const me = players.find((p) => p.anonId === anonId)!;
+    const rated = players.flatMap((p) => {
+      const account = opponents.get(p.anonId);
+      return account
+        ? [{ rating: account.rating, score: p.score, isBot: account.role === "bot" }]
+        : [];
+    });
+    return computeRatings([{ rating, score: me.score }, ...rated])[0]!;
+  }, STARTING_RATING);
+}
+
 export interface RankedAccount {
   rank: number;
   username: string;
+  tag: string;
   rating: number;
+  /** Ce que porte son canard, montré au classement. */
+  outfit: string[];
 }
 
 export interface Ranking {
@@ -130,6 +173,22 @@ export interface Ranking {
    * qui ne sert à rien : celui où on ne se trouve pas.
    */
   viewer?: RankedAccount;
+}
+
+/** Tous les comptes avec leur rang général. */
+function rankedAccounts() {
+  return db
+    .select({
+      username: accounts.username,
+      tag: accounts.tag,
+      rating: accounts.rating,
+      outfit: accounts.outfit,
+      rank: sql<number>`rank() over (order by ${accounts.rating} desc, ${accounts.username})`.as(
+        "rank",
+      ),
+    })
+    .from(accounts)
+    .as("ranked");
 }
 
 /**
@@ -145,16 +204,7 @@ export interface Ranking {
  */
 export async function listRanking(limit = 10, search?: string): Promise<RankedAccount[]> {
   const term = search?.trim();
-  const ranked = db
-    .select({
-      username: accounts.username,
-      rating: accounts.rating,
-      rank: sql<number>`rank() over (order by ${accounts.rating} desc, ${accounts.username})`.as(
-        "rank",
-      ),
-    })
-    .from(accounts)
-    .as("ranked");
+  const ranked = rankedAccounts();
 
   const query = db.select().from(ranked).orderBy(ranked.rank).limit(limit);
   const rows = term
@@ -164,7 +214,9 @@ export async function listRanking(limit = 10, search?: string): Promise<RankedAc
   return rows.map((row) => ({
     rank: Number(row.rank),
     username: row.username,
+    tag: row.tag,
     rating: row.rating,
+    outfit: publicOutfit(row.outfit),
   }));
 }
 
@@ -180,19 +232,24 @@ export async function getRatingForAnonId(anonId?: string): Promise<number> {
 }
 
 /**
- * Classement affichable : les meilleurs, plus le joueur connecté s'il n'y est
- * pas déjà.
+ * Classement affichable : les meilleurs, plus le joueur connecté (désigné par
+ * son code) s'il n'y est pas déjà.
  */
 export async function listRankingFor(
-  viewerUsername?: string,
+  viewerTag?: string,
   limit = 10,
   search?: string,
 ): Promise<Ranking> {
   const top = await listRanking(limit, search);
-  if (!viewerUsername || top.some((row) => row.username === viewerUsername)) return { top };
+  if (!viewerTag || top.some((row) => row.tag === viewerTag)) return { top };
 
-  const [viewer] = await listRanking(1, viewerUsername);
-  // La recherche est partielle : on ne garde le résultat que s'il s'agit
-  // bien du joueur, pas d'un pseudo qui contient le sien.
-  return viewer?.username === viewerUsername ? { top, viewer } : { top };
+  const viewer = await rankOf(viewerTag);
+  return viewer ? { top, viewer } : { top };
+}
+
+/** La place d'un joueur dans le classement général. */
+async function rankOf(tag: string): Promise<RankedAccount | undefined> {
+  const ranked = rankedAccounts();
+  const [row] = await db.select().from(ranked).where(eq(ranked.tag, tag));
+  return row && { ...row, rank: Number(row.rank), outfit: publicOutfit(row.outfit) };
 }

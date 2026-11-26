@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { login as loginApi, loginGoogle, register as registerApi } from "../lib/authApi.js";
 import { getOrCreateAnonId, renewAnonId } from "../lib/anonId.js";
+import { fetchAccountProfile } from "../lib/accountApi.js";
 import { clearSession, loadSession, persistSession, type Session } from "../lib/session.js";
 
 export const useAuthStore = defineStore("auth", {
@@ -23,8 +24,8 @@ export const useAuthStore = defineStore("auth", {
       persistSession(result);
       return undefined;
     },
-    async login(identifier: string, password: string): Promise<string | undefined> {
-      const result = await loginApi(identifier, password);
+    async login(email: string, password: string): Promise<string | undefined> {
+      const result = await loginApi(email, password);
       if ("error" in result) return result.error;
       this.session = result;
       persistSession(result);
@@ -39,6 +40,15 @@ export const useAuthStore = defineStore("auth", {
       this.session = result;
       persistSession(result);
       return undefined;
+    },
+    /** Complète une session ouverte avant l'arrivée du code joueur. */
+    async completeSession() {
+      const session = this.session;
+      if (!session || session.tag) return;
+      const profile = await fetchAccountProfile(session.token);
+      if (!profile?.tag || this.session?.token !== session.token) return;
+      this.session = { ...session, tag: profile.tag };
+      persistSession(this.session);
     },
     logout() {
       this.session = null;

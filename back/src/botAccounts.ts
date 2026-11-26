@@ -3,6 +3,7 @@ import { asc, eq, sql } from "drizzle-orm";
 import { BOT_LEVELS, isBotLevel, type BotLevel } from "./bots.js";
 import { db } from "./db.js";
 import { accounts } from "./schema.js";
+import { publicOutfit } from "./catalog.js";
 
 /**
  * Les bots sont des comptes à part entière : même table, même Elo, mêmes
@@ -243,6 +244,7 @@ export interface BotOpponent {
   anonId: string;
   level: BotLevel;
   rating: number;
+  outfit: string[];
 }
 
 /**
@@ -269,5 +271,6 @@ export async function pickBotOpponents(rating: number, count: number): Promise<B
     // intelligence, elle ne change pas parce qu'il vient de gagner.
     level: levelOf(bot),
     rating: bot.rating,
+    outfit: publicOutfit(bot.outfit),
   }));
 }

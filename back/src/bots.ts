@@ -12,9 +12,8 @@ const DIRECTIONS: Direction[] = ["UP", "DOWN", "LEFT", "RIGHT"];
 /**
  * Niveaux de bots. La force vient de DEUX leviers, et jamais d'un troisième :
  *
- * 1. la cadence (`intervalMs`), toujours SOUS la vitesse d'un humain qui
- *    martèle la touche (~10-14 actions/s, voir docs/02-gameplay.md#rythme-de-
- *    déplacement). Un adversaire plus rapide qu'un humain ne se lit pas comme
+ * 1. la cadence (`intervalMs`), toujours SOUS le rythme maximal d'un joueur (un
+ *    pas toutes les STEP_MS, voir docs/02-gameplay.md#rythme-de-déplacement). Un adversaire plus rapide qu'un humain ne se lit pas comme
  *    fort, il se lit comme un tricheur — et perdre contre plus rapide que soi
  *    n'apprend rien sur son propre niveau, ce qui ruinerait un classement.
  * 2. la qualité de décision. Tous VEULENT gagner — même le débutant vise la
@@ -41,9 +40,9 @@ const DIRECTIONS: Direction[] = ["UP", "DOWN", "LEFT", "RIGHT"];
  *   niveau         cadence  vue   pas (méd.)  s/point (méd.)  s/point (p90)
  *   Débutant         500ms    6           24            12.0           15.0
  *   Intermédiaire    400ms    8           20             8.0            8.8
- *   Confirmé         220ms    ∞           20             4.4            4.4
- *   Expert           160ms    ∞           20             3.2            3.2
- *   Impossible       120ms    ∞           20             2.4            2.4
+ *   Confirmé         260ms    ∞           20             5.2            5.2
+ *   Expert           220ms    ∞           20             4.4            4.4
+ *   Impossible       190ms    ∞           20             3.8            3.8
  *
  * Une vue de 6 est un PLANCHER, pas un réglage : c'est la plus petite qui
  * fasse arriver le débutant à la base adverse à tous les coups. En dessous il
@@ -85,7 +84,7 @@ export const BOT_LEVELS = {
   },
   confirme: {
     label: "Confirmé",
-    intervalMs: 220,
+    intervalMs: 260,
     chaseChance: 1,
     sightRadius: Infinity,
     defends: false,
@@ -93,7 +92,7 @@ export const BOT_LEVELS = {
   },
   expert: {
     label: "Expert",
-    intervalMs: 160,
+    intervalMs: 220,
     chaseChance: 1,
     sightRadius: Infinity,
     defends: true,
@@ -101,12 +100,12 @@ export const BOT_LEVELS = {
   },
   // Le seul niveau qui gagne les face-à-face par la vitesse pure. Toucher se
   // décide à CELUI QUI BOUGE LE PREMIER (voir game-engine/game.ts#canTag) :
-  // à 120 ms, le bot tique plus vite qu'un humain ne réagit (~200 ms), et rafle
-  // donc l'échange chaque fois qu'on se croise. C'est un mur volontaire, pas
+  // à 190 ms, le bot tique à peine moins vite que le rythme maximal et plus vite
+  // qu'un humain ne réagit (~200 ms) : il rafle souvent l'échange quand on se croise. C'est un mur volontaire, pas
   // un palier de progression — d'où son nom.
   impossible: {
     label: "Impossible",
-    intervalMs: 120,
+    intervalMs: 190,
     chaseChance: 1,
     sightRadius: Infinity,
     defends: true,

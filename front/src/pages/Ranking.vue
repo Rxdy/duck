@@ -20,7 +20,7 @@ const loading = ref(true);
 
 async function refresh() {
   loading.value = true;
-  ranking.value = await fetchRanking(search.value, auth.session?.username);
+  ranking.value = await fetchRanking(search.value, auth.session?.tag);
   loading.value = false;
 }
 
@@ -80,7 +80,7 @@ watch(search, () => {
       <RankingPodium
         v-if="showPodium && !loading"
         :players="ranking.top.slice(0, 3)"
-        :me="auth.session?.username"
+        :me="auth.session?.tag"
       />
     </div>
 
@@ -96,9 +96,9 @@ watch(search, () => {
       <ul v-else class="flex min-h-0 flex-1 flex-col justify-center gap-1">
         <RankingRow
           v-for="player in listed"
-          :key="player.username"
+          :key="player.tag"
           :player="player"
-          :highlight="player.username === auth.session?.username"
+          :highlight="player.tag === auth.session?.tag"
         />
         <RankingRow v-if="ranking.viewer" :player="ranking.viewer" highlight />
       </ul>

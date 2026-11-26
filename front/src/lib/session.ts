@@ -2,6 +2,8 @@ export interface Session {
   token: string;
   username: string;
   email: string;
+  /** Code joueur. Absent d'une session ouverte avant son arrivée : complété au démarrage. */
+  tag?: string;
 }
 
 /**
@@ -19,7 +21,9 @@ export function parseSession(raw: unknown): Session | undefined {
   ) {
     return undefined;
   }
-  return { token: r.token, username: r.username, email: r.email };
+  const session: Session = { token: r.token, username: r.username, email: r.email };
+  if (typeof r.tag === "string") session.tag = r.tag;
+  return session;
 }
 
 const STORAGE_KEY = "duck:session";

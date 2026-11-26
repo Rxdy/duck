@@ -37,13 +37,24 @@ export function antennaColor(timeMs: number, reducedMotion = false): string {
   return ANTENNA_COLORS[index]!;
 }
 
-/** Durée d'une glissade d'une case : courte, pour suivre les touches enchaînées. */
-export const GLIDE_MS = 130;
+/**
+ * Durée d'un pas : la glissade d'une case, toujours entière. C'est aussi le rythme maximal, que le
+ * serveur impose (STEP_MS dans back/src/shared.ts, à garder égal).
+ */
+export const GLIDE_MS = 180;
 
-/** Courbe « ease-in-out », comme une transition CSS. */
+export const linear = (t: number) => Math.min(1, Math.max(0, t));
+
+/** Part de vitesse constante dans la courbe de départ : 1 serait sans aucun adoucissement. */
+const STEADY = 0.8;
+
+/**
+ * Départ et arrivée d'un pas isolé, à peine adoucis. Une courbe plus marquée freinait presque à
+ * l'arrêt en fin de case, puis le pas suivant repartait d'un coup : un à-coup à chaque enchaînement.
+ */
 export function easeInOut(t: number): number {
-  const x = Math.min(1, Math.max(0, t));
-  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+  const x = linear(t);
+  return STEADY * x + (1 - STEADY) * ((1 - Math.cos(Math.PI * x)) / 2);
 }
 
 /** Orientation (rotation autour de y) pour un pas (dx, dy) sur la grille. */

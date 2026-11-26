@@ -1,0 +1,125 @@
+<!doctype html>
+<!-- La glissade du jeu, jouée avec son vrai code : /atelier/glissade.html (pas inclus dans le build). -->
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>La glissade</title>
+    <style>
+      body {
+        margin: 0;
+        background: #10141c;
+        color: #f1f5f9;
+        font: 15px system-ui;
+        text-align: center;
+      }
+      canvas {
+        display: block;
+        margin: 0 auto;
+        max-width: 100%;
+      }
+      button {
+        margin: 4px;
+        padding: 8px 14px;
+        border: 1px solid #3a4457;
+        border-radius: 10px;
+        background: #1a1f2a;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+      button[aria-pressed="true"] {
+        background: #38bdf8;
+        color: #06121c;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>La glissade, avec le code du jeu</h2>
+    <div id="modes">
+      <button data-mode="chaine" aria-pressed="true">Pas enchaînés</button>
+      <button data-mode="un">Un pas à la fois</button>
+    </div>
+    <div id="speeds">
+      <button data-slow="1" aria-pressed="true">Vitesse réelle</button>
+      <button data-slow="5">Ralenti ×5</button>
+    </div>
+    <p id="info"></p>
+    <script type="module">
+      import * as T from "three";
+      import { createCoincoin, GLIDE_MS } from "/src/lib/coincoin.ts";
+      import { createDuckMotion } from "/src/composables/useDuckMotion.ts";
+
+      const renderer = new T.WebGLRenderer({ antialias: true });
+      renderer.setPixelRatio(devicePixelRatio);
+      const width = Math.min(720, innerWidth);
+      renderer.setSize(width, width * 0.62);
+      document.body.insertBefore(renderer.domElement, document.getElementById("info"));
+      const scene = new T.Scene();
+      scene.background = new T.Color("#10141c");
+      scene.add(new T.AmbientLight(0xffffff, 1.3));
+      const sun = new T.DirectionalLight(0xffffff, 1.6);
+      sun.position.set(-1, 6, 5);
+      scene.add(sun);
+      for (let x = 0; x < 6; x++)
+        for (let z = 0; z < 6; z++) {
+          const tile = new T.Mesh(
+            new T.BoxGeometry(0.96, 0.1, 0.96),
+            new T.MeshLambertMaterial({ color: (x + z) % 2 ? "#2b3445" : "#232b3a" }),
+          );
+          tile.position.set(x + 0.5, -0.05, z + 0.5);
+          scene.add(tile);
+        }
+      const camera = new T.OrthographicCamera(-3.6, 3.6, 2.23, -2.23, 0.1, 100);
+      camera.position.set(13, 11, 13);
+      camera.lookAt(3, 0, 3);
+      const duck = createCoincoin("#FF4D6D");
+      duck.setAntennaColor("#ffe23a");
+      scene.add(duck.group);
+
+      // Un tour de carré : trois cases par côté.
+      const path = [];
+      for (let i = 1; i <= 3; i++) path.push([1 + i, 1]);
+      for (let i = 1; i <= 3; i++) path.push([4, 1 + i]);
+      for (let i = 1; i <= 3; i++) path.push([4 - i, 4]);
+      for (let i = 1; i <= 3; i++) path.push([1, 4 - i]);
+
+      let mode = "chaine";
+      let slow = 1;
+      let motion = createDuckMotion(1, 1);
+      let clock = 0;
+      let nextAt = 0;
+      let index = 0;
+      let last = performance.now();
+      const press = (group, button) => {
+        for (const b of document.querySelectorAll(`#${group} button`))
+          b.setAttribute("aria-pressed", String(b === button));
+      };
+      document.getElementById("modes").onclick = (e) => {
+        if (!e.target.dataset.mode) return;
+        mode = e.target.dataset.mode;
+        press("modes", e.target);
+      };
+      document.getElementById("speeds").onclick = (e) => {
+        if (!e.target.dataset.slow) return;
+        slow = Number(e.target.dataset.slow);
+        press("speeds", e.target);
+      };
+
+      renderer.setAnimationLoop((now) => {
+        clock += Math.min(50, now - last) / slow;
+        last = now;
+        if (clock >= nextAt) {
+          const [x, y] = path[index++ % path.length];
+          motion.moveTo(x, y, nextAt);
+          nextAt += mode === "chaine" ? GLIDE_MS : GLIDE_MS * 3;
+        }
+        const pose = motion.poseAt(clock);
+        duck.group.position.set(pose.x + 0.5, 0, pose.y + 0.5);
+        duck.group.rotation.y = pose.heading;
+        renderer.render(scene, camera);
+        document.getElementById("info").textContent = `Une case : ${GLIDE_MS} ms`;
+      });
+    </script>
+  </body>
+</html>

@@ -226,10 +226,10 @@ describe("listRankingFor", () => {
     const dernier = await freshAccount(1);
     const [row] = await db.select().from(accounts).where(eq(accounts.id, dernier.id));
 
-    const ranking = await listRankingFor(row!.username, 3);
+    const ranking = await listRankingFor(row!.tag, 3);
 
     expect(ranking.top).toHaveLength(3);
-    expect(ranking.viewer?.username).toBe(row!.username);
+    expect(ranking.viewer?.tag).toBe(row!.tag);
     expect(ranking.viewer!.rank).toBeGreaterThan(3);
   });
 
@@ -237,16 +237,14 @@ describe("listRankingFor", () => {
     const champion = await freshAccount(99_999);
     const [row] = await db.select().from(accounts).where(eq(accounts.id, champion.id));
 
-    const ranking = await listRankingFor(row!.username, 5);
+    const ranking = await listRankingFor(row!.tag, 5);
 
-    expect(ranking.top[0]!.username).toBe(row!.username);
+    expect(ranking.top[0]!.tag).toBe(row!.tag);
     expect(ranking.viewer).toBeUndefined();
   });
 
-  it("ne confond pas un joueur avec un pseudo qui contient le sien", async () => {
-    // La recherche est partielle : sans vérification, chercher "elo" pourrait
-    // afficher "elo-1234" comme étant le joueur connecté.
-    const ranking = await listRankingFor("pseudo-qui-n-existe-pas", 3);
+  it("n'ajoute personne pour un code inconnu", async () => {
+    const ranking = await listRankingFor("ZZZZZZ", 3);
     expect(ranking.viewer).toBeUndefined();
   });
 });

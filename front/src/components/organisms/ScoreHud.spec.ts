@@ -8,7 +8,7 @@ function player(overrides: Partial<PlayerState> = {}): PlayerState {
     id: "p1",
     name: "Alice",
     color: "#FF4D6D",
-    accessory: "none",
+    outfit: [],
     x: 0,
     y: 0,
     spawnX: 0,

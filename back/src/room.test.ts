@@ -2,6 +2,7 @@ import { describe, expect, it, vi, afterEach } from "vitest";
 import type { WebSocket } from "ws";
 import { Tile, type GameMap } from "./game-engine/index.js";
 import { generateMap } from "./map-generator/index.js";
+import { STEP_MS } from "./shared.js";
 import { GameRoom } from "./room.js";
 import { PLAYER_COLORS } from "./shared.js";
 import { POINTS_PER_BASE } from "./game-engine/index.js";
@@ -18,6 +19,15 @@ function lastMessage(socket: WebSocket): { type: string; [key: string]: unknown 
 
 function testMap(seed = 1): GameMap {
   return generateMap({ width: 12, height: 12, seed });
+}
+
+/** Le dernier état reçu par ce joueur. */
+function lastState(socket: { send: unknown }): { players: { x: number }[] } {
+  const calls = (socket.send as unknown as { mock: { calls: [string][] } }).mock.calls;
+  return calls
+    .map(([raw]) => JSON.parse(raw) as { type: string; players: { x: number }[] })
+    .filter((m) => m.type === "STATE")
+    .at(-1)!;
 }
 
 describe("GameRoom", () => {
@@ -81,37 +91,57 @@ describe("GameRoom", () => {
     expect(lastMessage.players[0].x).toBeGreaterThanOrEqual(0);
   });
 
-  it("ignores a MOVE sent faster than any human could type (client scripté)", () => {
-    const openMap: GameMap = {
-      width: 5,
-      height: 1,
-      tiles: [[Tile.Spawn, Tile.Empty, Tile.Empty, Tile.Empty, Tile.Empty]],
-    };
+  describe("un pas par glissade", () => {
+    afterEach(() => vi.useRealTimers());
 
-    vi.useFakeTimers();
-    try {
-      const room = new GameRoom("room-cooldown", openMap);
+    /** Un couloir assez long, et un joueur au départ (1,1). */
+    function corridor() {
+      vi.useFakeTimers();
+      const tiles = [Array(9).fill(Tile.Wall), Array(9).fill(Tile.Empty), Array(9).fill(Tile.Wall)];
+      tiles[1]![0] = Tile.Wall;
+      tiles[1]![1] = Tile.Spawn;
+      const room = new GameRoom("pas", { width: 9, height: 3, tiles });
       const socket = fakeSocket();
-      room.join("p1", "Alice", socket);
-
-      room.handle("p1", { type: "MOVE", direction: "RIGHT" });
-      room.handle("p1", { type: "MOVE", direction: "RIGHT" }); // même milliseconde, ignoré
-
-      let calls = (socket.send as ReturnType<typeof vi.fn>).mock.calls;
-      let lastMessage = JSON.parse(calls[calls.length - 1]![0] as string);
-      expect(lastMessage.players[0]).toMatchObject({ x: 1 });
-
-      // 50 ms = 20 actions/s : au-delà de ce qu'un joueur atteint au clavier,
-      // donc jamais atteint en jouant normalement.
-      vi.advanceTimersByTime(50);
-      room.handle("p1", { type: "MOVE", direction: "RIGHT" }); // plancher écoulé, accepté
-
-      calls = (socket.send as ReturnType<typeof vi.fn>).mock.calls;
-      lastMessage = JSON.parse(calls[calls.length - 1]![0] as string);
-      expect(lastMessage.players[0]).toMatchObject({ x: 2 });
-    } finally {
-      vi.useRealTimers();
+      room.join("p1", "Ana", socket);
+      const x = () => lastState(socket).players[0]!.x;
+      const right = () => room.handle("p1", { type: "MOVE", direction: "RIGHT" });
+      return { x, right, room };
     }
+
+    it("n'avance pas plus vite en martelant, même avec un client scripté", () => {
+      const { x, right } = corridor();
+
+      for (let i = 0; i < 20; i++) right();
+      expect(x()).toBe(2);
+
+      vi.advanceTimersByTime(STEP_MS - 1);
+      expect(x()).toBe(2);
+      vi.advanceTimersByTime(1);
+      // Un seul pas était gardé, pas les dix-neuf autres.
+      expect(x()).toBe(3);
+      vi.advanceTimersByTime(STEP_MS * 5);
+      expect(x()).toBe(3);
+    });
+
+    it("répond aussitôt à un canard au repos", () => {
+      const { x, right } = corridor();
+      right();
+      vi.advanceTimersByTime(STEP_MS);
+
+      right();
+
+      expect(x()).toBe(3);
+    });
+
+    it("oublie le pas en attente d'un joueur parti", () => {
+      const { right, room } = corridor();
+      right();
+      right();
+
+      room.leave("p1");
+
+      expect(vi.getTimerCount()).toBe(0);
+    });
   });
 
   it("spawns the player on a custom map's Spawn tile (mode entraînement)", () => {
@@ -369,10 +399,10 @@ describe("GameRoom", () => {
         room.start();
 
         room.handle("p1", { type: "MOVE", direction: "RIGHT" });
-        vi.advanceTimersByTime(150);
+        vi.advanceTimersByTime(STEP_MS);
         room.handle("p1", { type: "MOVE", direction: "RIGHT" }); // atteint le but
 
-        expect(onEnd.mock.calls[0]![0].durationMs).toBe(150);
+        expect(onEnd.mock.calls[0]![0].durationMs).toBe(STEP_MS);
       } finally {
         vi.useRealTimers();
       }
@@ -399,11 +429,11 @@ describe("GameRoom", () => {
 
         room.join("p1", "Alice", fakeSocket());
         room.handle("p1", { type: "MOVE", direction: "RIGHT" });
-        vi.advanceTimersByTime(150);
+        vi.advanceTimersByTime(STEP_MS);
         room.start(); // réveil tardif, la salle n'attendait pas
         room.handle("p1", { type: "MOVE", direction: "RIGHT" });
 
-        expect(onEnd.mock.calls[0]![0].durationMs).toBe(150);
+        expect(onEnd.mock.calls[0]![0].durationMs).toBe(STEP_MS);
       } finally {
         vi.useRealTimers();
       }
@@ -419,9 +449,9 @@ describe("GameRoom", () => {
 
     function scoreOnce(room: GameRoom) {
       room.handle("p1", { type: "MOVE", direction: "RIGHT" });
-      vi.advanceTimersByTime(150);
+      vi.advanceTimersByTime(STEP_MS);
       room.handle("p1", { type: "MOVE", direction: "RIGHT" }); // (2,0) = Goal
-      vi.advanceTimersByTime(150);
+      vi.advanceTimersByTime(STEP_MS);
     }
 
     it("broadcasts STATE (not END) while the score is still below winScore", () => {
@@ -513,7 +543,7 @@ describe("GameRoom", () => {
         scoreOnce(room); // base atteinte au 2e coup, 150 ms après l'entrée
 
         // Les 5 s d'attente ne comptent pas : seul le temps joué est mesuré.
-        expect(onEnd.mock.calls[0]![0].durationMs).toBe(150);
+        expect(onEnd.mock.calls[0]![0].durationMs).toBe(STEP_MS);
       } finally {
         vi.useRealTimers();
       }

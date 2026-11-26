@@ -1,9 +1,10 @@
-import { randomBytes, randomInt, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
-import { eq, or, sql } from "drizzle-orm";
+import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "./db.js";
 import { accounts, sessions } from "./schema.js";
 import { passwordEntropy, REQUIRED_BITS } from "./passwordStrength.js";
-import { grantStarterSkins } from "./skins.js";
+import { giveRandomItem } from "./wardrobe.js";
+import { replayRating } from "./rating.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const USERNAME_PATTERN = /^[a-zA-Z0-9_-]{3,20}$/;
@@ -46,13 +47,13 @@ export function validateCredentials(
   return undefined;
 }
 
-export class UsernameOrEmailAlreadyUsedError extends Error {
-  constructor(readonly field?: "username" | "email") {
-    super("pseudo ou email déjà utilisé");
+export class EmailAlreadyUsedError extends Error {
+  constructor() {
+    super("email déjà utilisé");
   }
 }
 
-/** Comparaison sans tenir compte de la casse : « Rudy » et « rudy » sont le même pseudo. */
+/** Comparaison sans tenir compte de la casse : « Rudy » et « rudy » s'écrivent pareil. */
 const sameText = (column: typeof accounts.username | typeof accounts.email, value: string) =>
   sql`lower(${column}) = ${value.toLowerCase()}`;
 
@@ -89,17 +90,47 @@ function violatedConstraint(error: unknown): string | undefined {
  * (voir db/init/10-anon-id-unique.sql).
  */
 const ANON_ID_CONSTRAINT = "accounts_anon_id_key";
+const TAG_CONSTRAINT = "accounts_tag_key";
+const INSERT_ATTEMPTS = 5;
+
+type Account = typeof accounts.$inferSelect;
+
+/**
+ * Crée la ligne du compte. Deux conflits se réparent seuls : un code joueur déjà
+ * tiré (on en tire un autre), et un `anon_id` de navigateur déjà revendiqué (le
+ * compte s'inscrit sans lui : ces parties sont celles de quelqu'un d'autre).
+ * Reste l'email, que seul le joueur peut changer.
+ */
+async function insertAccount(values: typeof accounts.$inferInsert): Promise<Account> {
+  let anonId = values.anonId ?? null;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      const [created] = await db
+        .insert(accounts)
+        .values({ ...values, anonId })
+        .returning();
+      return created!;
+    } catch (error) {
+      const constraint = violatedConstraint(error);
+      if (constraint === undefined) throw error;
+      if (constraint.includes("email")) throw new EmailAlreadyUsedError();
+      if (constraint === ANON_ID_CONSTRAINT) anonId = null;
+      else if (constraint !== TAG_CONSTRAINT || attempt >= INSERT_ATTEMPTS) throw error;
+    }
+  }
+}
 
 export interface AuthResult {
   token: string;
   username: string;
   email: string;
+  tag: string;
 }
 
 /**
  * Crée un compte et une session dans la foulée (inscription = connecté
  * immédiatement, pas d'étape de vérification d'email pour l'instant), et
- * offre les skins de départ (voir back/src/skins.ts). `anonId`, si fourni,
+ * offre un accessoire au hasard (voir back/src/wardrobe.ts). `anonId`, si fourni,
  * est enregistré pour retrouver plus tard les parties jouées avant
  * l'inscription (voir back/src/db.ts).
  */
@@ -109,78 +140,43 @@ export async function registerAccount(
   password: string,
   anonId?: string,
 ): Promise<AuthResult> {
-  // Pas de `select` de vérification avant l'insertion : seule la contrainte
-  // d'unicité de la base tranche sans fenêtre de course (voir
-  // UNIQUE_VIOLATION). C'est aussi un aller-retour de moins.
-  // Vérification préalable pour dire LEQUEL est pris. Les index uniques de la
-  // base (db/init/13-unique-sans-casse.sql) tranchent les inscriptions simultanées.
+  // Vérification préalable pour répondre clairement ; l'index unique de la base
+  // (db/init/13-unique-sans-casse.sql) tranche les inscriptions simultanées.
   const address = email.toLowerCase();
   const taken = await db
-    .select({ username: accounts.username, email: accounts.email })
+    .select({ id: accounts.id })
     .from(accounts)
-    .where(or(sameText(accounts.username, username), sameText(accounts.email, address)));
-  if (taken.length > 0) {
-    const nameTaken = taken.some((a) => a.username.toLowerCase() === username.toLowerCase());
-    throw new UsernameOrEmailAlreadyUsedError(nameTaken ? "username" : "email");
-  }
+    .where(sameText(accounts.email, address));
+  if (taken.length > 0) throw new EmailAlreadyUsedError();
 
-  const values = {
+  const account = await insertAccount({
     username,
     email: address,
     passwordHash: hashPassword(password),
     anonId: anonId ?? null,
-  };
+  });
 
-  let account;
-  try {
-    [account] = await db.insert(accounts).values(values).returning();
-  } catch (error) {
-    const constraint = violatedConstraint(error);
-    if (constraint === undefined) throw error;
+  await giveRandomItem(account.id, "signup");
+  await keepGuestProgress(account.id, account.anonId);
 
-    // L'`anon_id` du navigateur appartient déjà à un autre compte : il n'y a
-    // rien d'anormal à créer un second compte depuis le même appareil, alors
-    // on l'inscrit SANS revendiquer cette identité. Il perd le rattachement
-    // des parties d'avant son inscription — elles sont bien celles de
-    // quelqu'un d'autre.
-    if (constraint === ANON_ID_CONSTRAINT) {
-      [account] = await db
-        .insert(accounts)
-        .values({ ...values, anonId: null })
-        .returning();
-    } else {
-      throw new UsernameOrEmailAlreadyUsedError(
-        constraint.includes("email") ? "email" : "username",
-      );
-    }
-  }
-
-  await grantStarterSkins(account!.id);
-
-  return createSession(account!.id, username, address);
+  return createSession(account);
 }
 
 /**
- * `identifier` accepte le pseudo ou l'email indifféremment (les deux sont
- * uniques, voir registerAccount). `undefined` si inconnu ou mot de passe
- * incorrect — pas de distinction entre les deux cas, pour ne pas révéler
- * quels identifiants existent.
+ * Connexion par email, seul identifiant que son propriétaire est seul à porter
+ * et à connaître. `undefined` si inconnu ou mot de passe incorrect — sans
+ * distinction, pour ne pas révéler quels comptes existent.
  */
 export async function loginAccount(
-  identifier: string,
+  email: string,
   password: string,
 ): Promise<AuthResult | undefined> {
-  const matches = await db
-    .select()
-    .from(accounts)
-    .where(or(sameText(accounts.email, identifier), sameText(accounts.username, identifier)));
+  const found = await db.select().from(accounts).where(sameText(accounts.email, email.trim()));
   // Plusieurs lignes ne sont possibles qu'avec d'anciens comptes ne différant que par la casse.
-  const account = matches.find(
+  const account = found.find(
     (a) => a.passwordHash !== null && verifyPassword(password, a.passwordHash),
   );
-  if (!account) return undefined;
-
-  return createSession(account.id, account.username, account.email);
+  return account && createSession(account);
 }
 
 /** Ce que Google atteste sur la personne, une fois son jeton vérifié (voir google.ts). */
@@ -213,7 +209,7 @@ export async function loginWithGoogle(
   anonId?: string,
 ): Promise<AuthResult> {
   const [known] = await db.select().from(accounts).where(eq(accounts.googleSub, profile.sub));
-  if (known) return createSession(known.id, known.username, known.email);
+  if (known) return createSession(known);
 
   const [sameEmail] = await db
     .select()
@@ -225,38 +221,39 @@ export async function loginWithGoogle(
       .set({ googleSub: profile.sub, passwordHash: null })
       .where(eq(accounts.id, sameEmail.id));
     await db.delete(sessions).where(eq(sessions.accountId, sameEmail.id));
-    return createSession(sameEmail.id, sameEmail.username, sameEmail.email);
+    return createSession(sameEmail);
   }
 
-  const base = usernameFromName(profile.name);
-  let username = base;
-  let claimedAnonId = anonId ?? null;
-  for (let attempt = 0; attempt < 8; attempt++) {
-    const [clash] = await db.select().from(accounts).where(sameText(accounts.username, username));
-    if (clash) {
-      username = `${base}${randomInt(1000, 10000)}`;
-      continue;
-    }
-    try {
-      const [created] = await db
-        .insert(accounts)
-        .values({
-          username,
-          email: profile.email.toLowerCase(),
-          googleSub: profile.sub,
-          anonId: claimedAnonId,
-        })
-        .returning();
-      await grantStarterSkins(created!.id);
-      return createSession(created!.id, username, profile.email);
-    } catch (error) {
-      const constraint = violatedConstraint(error);
-      if (constraint === undefined) throw error;
-      if (constraint === ANON_ID_CONSTRAINT) claimedAnonId = null;
-      else username = `${base}${randomInt(1000, 10000)}`;
-    }
-  }
-  throw new UsernameOrEmailAlreadyUsedError();
+  const created = await insertAccount({
+    username: usernameFromName(profile.name),
+    email: profile.email.toLowerCase(),
+    googleSub: profile.sub,
+    anonId: anonId ?? null,
+  });
+  await giveRandomItem(created.id, "signup");
+  await keepGuestProgress(created.id, created.anonId);
+  return createSession(created);
+}
+
+/** Les parties jouées en invité comptent au classement du compte qui les revendique. */
+async function keepGuestProgress(accountId: string, anonId: string | null): Promise<void> {
+  if (!anonId) return;
+  const rating = await replayRating(anonId);
+  await db.update(accounts).set({ rating }).where(eq(accounts.id, accountId));
+}
+
+/**
+ * Identifiant sous lequel enregistrer les parties d'un compte : le sien, quel
+ * que soit celui du navigateur utilisé (il est renouvelé à l'inscription, et
+ * diffère d'un appareil à l'autre). Attribué s'il n'en a pas encore.
+ */
+export async function anonIdForAccount(accountId: string): Promise<string> {
+  await db
+    .update(accounts)
+    .set({ anonId: randomUUID() })
+    .where(and(eq(accounts.id, accountId), isNull(accounts.anonId)));
+  const [account] = await db.select().from(accounts).where(eq(accounts.id, accountId));
+  return account!.anonId!;
 }
 
 /** Résout le compte propriétaire d'un token de session, `undefined` s'il est invalide/expiré. */
@@ -267,6 +264,7 @@ export async function getAccountIdForToken(token: string): Promise<string | unde
 
 export interface AccountProfile {
   username: string;
+  tag: string;
   email: string;
   anonId: string | null;
 }
@@ -275,15 +273,12 @@ export interface AccountProfile {
 export async function getAccountById(accountId: string): Promise<AccountProfile | undefined> {
   const [account] = await db.select().from(accounts).where(eq(accounts.id, accountId));
   if (!account) return undefined;
-  return { username: account.username, email: account.email, anonId: account.anonId };
+  const { username, tag, email, anonId } = account;
+  return { username, tag, email, anonId };
 }
 
-async function createSession(
-  accountId: string,
-  username: string,
-  email: string,
-): Promise<AuthResult> {
+async function createSession(account: Account): Promise<AuthResult> {
   const token = randomUUID();
-  await db.insert(sessions).values({ token, accountId });
-  return { token, username, email };
+  await db.insert(sessions).values({ token, accountId: account.id });
+  return { token, username: account.username, email: account.email, tag: account.tag };
 }

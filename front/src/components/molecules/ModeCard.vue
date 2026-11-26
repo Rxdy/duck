@@ -9,10 +9,12 @@ withDefaults(
     // Destination de la carte : chaque mode a la sienne (le mode voyage dans
     // l'URL, puis dans le JOIN — voir pages/Game.vue).
     to: string;
+    /** Réservé aux comptes : la carte mène à l'inscription. */
+    locked?: boolean;
     ducks?: string[];
     details?: { icon: string; text: string }[];
   }>(),
-  { ducks: () => [], details: () => [] },
+  { ducks: () => [], details: () => [], locked: false },
 );
 
 defineEmits<{ maps: []; rules: [] }>();
@@ -20,6 +22,7 @@ defineEmits<{ maps: []; rules: [] }>();
 
 <template>
   <article
+    :class="locked ? 'opacity-50 grayscale' : ''"
     class="panel group relative flex min-h-0 flex-col justify-between gap-2 rounded-2xl p-3 tiny:gap-1.5 tiny:p-2.5 short:gap-1 short:p-2 transition hover:-translate-y-0.5 active:scale-[0.98] sm:p-4"
   >
     <div class="flex items-start justify-between gap-3 short:flex-col-reverse short:gap-0">
@@ -70,11 +73,12 @@ defineEmits<{ maps: []; rules: [] }>();
       <RouterLink
         v-if="ready"
         :to="to"
-        :aria-label="`Jouer en ${label}`"
+        :aria-label="locked ? `S'inscrire pour jouer en ${label}` : `Jouer en ${label}`"
         class="flex items-center justify-end gap-1 text-sm font-bold after:absolute after:inset-0 after:rounded-2xl"
       >
-        <span>Jouer</span>
+        <span>{{ locked ? "S'inscrire" : "Jouer" }}</span>
         <i
+          v-if="!locked"
           class="accent-icon ri-arrow-right-circle-fill text-2xl transition group-hover:translate-x-1"
           aria-hidden="true"
         />

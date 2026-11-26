@@ -271,3 +271,6 @@ export function isTaskDone(task: Task, outcome: MoveOutcome, direction: Directio
   if (task.kind === "tag") return outcome.tagged;
   return me.score >= task.points;
 }
+
+/** La tenue de l'adversaire d'entraînement. */
+export const RIVAL_OUTFIT = ["casquette-envers", "sweat-skate", "planche-skate"];

@@ -10,6 +10,11 @@ describe("parseSession", () => {
     });
   });
 
+  it("garde le code joueur quand il est là", () => {
+    const stored = { token: "abc", username: "alice", email: "a@example.com", tag: "A3F9C2" };
+    expect(parseSession(stored)).toEqual(stored);
+  });
+
   it("rejects null, non-objects, or missing fields", () => {
     expect(parseSession(null)).toBeUndefined();
     expect(parseSession("nope")).toBeUndefined();

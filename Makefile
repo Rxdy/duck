@@ -33,7 +33,7 @@ ELO_USER := $(if $(filter command line,$(origin USER)),$(USER),)
         test test-front test-back build check \
         db-up db-down db-wait db-schema db-psql db-logs db-reset elo \
         up down build-images test-images release logs ps \
-        sprites icons clean clean-db
+        sprites icons accessories clean clean-db
 
 ##@ Aide
 
@@ -129,22 +129,22 @@ db-psql: db-up db-wait ## Ouvre un shell psql sur la base locale
 db-logs: ## Suit les logs de Postgres
 	$(COMPOSE) logs -f db
 
-elo: db-up db-wait ## Fixe le classement d'un compte — USER=pseudo VALUE=1200
+elo: db-up db-wait ## Fixe le classement d'un compte — USER=email VALUE=1200
 	@if [ -z "$(ELO_USER)" ] || [ -z "$(VALUE)" ]; then \
-		echo "Usage : make elo USER=<pseudo> VALUE=<entier>" >&2; \
-		echo "Exemple : make elo USER=Deeps VALUE=1200" >&2; \
+		echo "Usage : make elo USER=<email> VALUE=<entier>" >&2; \
+		echo "Exemple : make elo USER=deeps@example.com VALUE=1200" >&2; \
 		exit 1; \
 	fi; \
 	case "$(VALUE)" in \
 		''|*[!0-9]*) echo "VALUE doit être un entier positif (reçu : « $(VALUE) »)." >&2; exit 1;; \
 	esac; \
 	updated=$$(printf '%s\n' \
-		"UPDATE accounts SET rating = :value WHERE username = :'username'" \
+		"UPDATE accounts SET rating = :value WHERE lower(email) = lower(:'username')" \
 		"RETURNING username || ' : ' || rating;" \
 		| $(COMPOSE) exec -T db psql -U duck -d duck -tAq -v ON_ERROR_STOP=1 \
 			-v username="$(ELO_USER)" -v value="$(VALUE)") || exit 1; \
 	if [ -z "$$updated" ]; then \
-		echo "Aucun compte nommé « $(ELO_USER) »." >&2; exit 1; \
+		echo "Aucun compte avec l'email $(ELO_USER)." >&2; exit 1; \
 	fi; \
 	echo "$$updated"
 
@@ -190,6 +190,9 @@ screenshot: ## Capture une page de l'app en 3D logicielle — URL=... OUT=shot.p
 		$(if $(TOKEN),--token=$(TOKEN)) $(if $(WAIT),--wait=$(WAIT))
 
 ##@ Art (scripts d'atelier, résultats commités)
+
+accessories: ## Met à jour la liste des accessoires du serveur depuis le catalogue du jeu
+	cd front && node ../scripts/export-accessories.mjs
 
 sprites: ## Régénère les sprites du canard par couleur (Pillow requis)
 	python3 scripts/generate-duck-sprites.py

@@ -1,17 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
-import { db } from "./db.js";
+import { db, recordMatch } from "./db.js";
 import {
+  anonIdForAccount,
   getAccountIdForToken,
   loginAccount,
   loginWithGoogle,
   usernameFromName,
   registerAccount,
-  UsernameOrEmailAlreadyUsedError,
+  EmailAlreadyUsedError,
   validateCredentials,
 } from "./auth.js";
-import { accounts, sessions } from "./schema.js";
+import { accounts, matches, sessions } from "./schema.js";
 
 // Test d'intégration contre une vraie base Postgres (schéma appliqué une
 // fois par vitest.global-setup.ts, voir db.test.ts) : la garantie utile ici
@@ -57,8 +58,45 @@ describe("validateCredentials", () => {
   });
 });
 
+describe("progression d'invité", () => {
+  it("compte au classement les parties jouées avant l'inscription", async () => {
+    const guest = randomUUID();
+    const rival = unique();
+    const rivalAnonId = randomUUID();
+    createdEmails.push(rival.email);
+    await registerAccount(rival.username, rival.email, "Hunter22!x", rivalAnonId);
+    await recordMatch({
+      mapName: "test-invite",
+      players: [
+        { anonId: guest, name: "Joueur", color: "#FF4D6D", score: 15, isWinner: true },
+        { anonId: rivalAnonId, name: rival.username, color: "#00C2D1", score: 3, isWinner: false },
+      ],
+    });
+
+    const { username, email } = unique();
+    createdEmails.push(email);
+    await registerAccount(username, email, "Hunter22!x", guest);
+
+    const [account] = await db.select().from(accounts).where(eq(accounts.email, email));
+    expect(account!.rating).toBeGreaterThan(0);
+    await db.delete(matches).where(eq(matches.mapName, "test-invite"));
+  });
+
+  it("garde l'identifiant du compte, et lui en attribue un s'il n'en a pas", async () => {
+    const { username, email } = unique();
+    createdEmails.push(email);
+    const { token } = await registerAccount(username, email, "Hunter22!x");
+    const accountId = (await getAccountIdForToken(token))!;
+
+    const first = await anonIdForAccount(accountId);
+
+    expect(first).toEqual(expect.any(String));
+    expect(await anonIdForAccount(accountId)).toBe(first);
+  });
+});
+
 describe("registerAccount / loginAccount", () => {
-  it("registers a new account, grants the starter skins, and returns a usable session token", async () => {
+  it("registers a new account and returns a usable session token", async () => {
     const { username, email } = unique();
     createdEmails.push(email);
 
@@ -69,8 +107,6 @@ describe("registerAccount / loginAccount", () => {
 
     const [account] = await db.select().from(accounts).where(eq(accounts.email, email));
     expect(account?.anonId).toBe("anon-42");
-    // Un skin de départ doit être équipé automatiquement (voir skins.ts#grantStarterSkins).
-    expect(account?.equippedSkinId).toEqual(expect.any(String));
 
     const [session] = await db.select().from(sessions).where(eq(sessions.token, result.token));
     expect(session?.accountId).toBe(account?.id);
@@ -97,45 +133,39 @@ describe("registerAccount / loginAccount", () => {
 
     await expect(
       registerAccount(unique().username, email, "anotherPassword"),
-    ).rejects.toBeInstanceOf(UsernameOrEmailAlreadyUsedError);
+    ).rejects.toBeInstanceOf(EmailAlreadyUsedError);
   });
 
-  it("refuses to register the same username twice", async () => {
+  it("laisse deux joueurs porter le même pseudo, chacun avec son code", async () => {
     const { username, email } = unique();
-    createdEmails.push(email);
+    const other = unique().email;
+    createdEmails.push(email, other);
 
-    await registerAccount(username, email, "Hunter22!x");
+    const [first, second] = await Promise.all([
+      registerAccount(username, email, "Hunter22!x"),
+      registerAccount(username, other, "Hunter22!x"),
+    ]);
 
-    const second = unique();
-    createdEmails.push(second.email);
-    await expect(registerAccount(username, second.email, "anotherPassword")).rejects.toBeInstanceOf(
-      UsernameOrEmailAlreadyUsedError,
-    );
+    expect(first.tag).toMatch(/^[0-9A-F]{6}$/);
+    expect(second.tag).not.toBe(first.tag);
+    // Chacun se connecte avec son email.
+    expect(await loginAccount(email, "Hunter22!x")).toMatchObject({ tag: first.tag });
+    expect(await loginAccount(other, "Hunter22!x")).toMatchObject({ tag: second.tag });
   });
 
-  it("n'en laisse passer qu'une quand deux inscriptions identiques partent en même temps", async () => {
-    // Le cas que le `select` de vérification ne pouvait pas couvrir : entre le
-    // `select` et le `insert`, les deux appels se croyaient seuls. La seconde
-    // remontait alors l'erreur brute du driver — un 500 au lieu d'un 400.
+  it("n'accepte qu'un compte par email, même demandé deux fois en même temps", async () => {
     const { username, email } = unique();
     createdEmails.push(email);
 
     const results = await Promise.allSettled([
       registerAccount(username, email, "Hunter22!x"),
-      registerAccount(username, unique().email, "Hunter22!x"),
+      registerAccount(username, email, "Hunter22!x"),
     ]);
 
-    const acceptées = results.filter((r) => r.status === "fulfilled");
-    const refusées = results.filter((r) => r.status === "rejected");
-    expect(acceptées).toHaveLength(1);
-    expect(refusées).toHaveLength(1);
-    expect((refusées[0] as PromiseRejectedResult).reason).toBeInstanceOf(
-      UsernameOrEmailAlreadyUsedError,
-    );
-
-    // Et la base n'a bien qu'un seul compte sous ce pseudo.
-    const rows = await db.select().from(accounts).where(eq(accounts.username, username));
-    expect(rows).toHaveLength(1);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((r) => r.status === "rejected")).toMatchObject({
+      reason: expect.any(EmailAlreadyUsedError),
+    });
   });
 
   it("n'attribue jamais le même anon_id à deux comptes", async () => {
@@ -187,14 +217,14 @@ describe("registerAccount / loginAccount", () => {
     expect(result).toMatchObject({ username, email });
   });
 
-  it("logs in successfully with the username and the correct password", async () => {
+  it("ne connecte pas avec le pseudo ni avec le code", async () => {
     const { username, email } = unique();
     createdEmails.push(email);
-    await registerAccount(username, email, "Correct-Password1");
+    const { tag } = await registerAccount(username, email, "Correct-Password1");
 
-    const result = await loginAccount(username, "Correct-Password1");
-
-    expect(result).toMatchObject({ username, email });
+    for (const identifier of [username, tag, `${username}#${tag}`]) {
+      expect(await loginAccount(identifier, "Correct-Password1")).toBeUndefined();
+    }
   });
 
   it("refuses login with the wrong password", async () => {
@@ -244,17 +274,14 @@ describe("connexion avec Google", () => {
 });
 
 describe("unicité sans tenir compte de la casse", () => {
-  it("refuse le même pseudo ou le même email écrit autrement, et dit lequel", async () => {
+  it("refuse le même email écrit autrement", async () => {
     const { username, email } = unique();
     createdEmails.push(email);
     await registerAccount(username, email, "Hunter22!x");
 
     await expect(
-      registerAccount(username.toUpperCase(), unique().email, "Hunter22!x"),
-    ).rejects.toMatchObject({ field: "username" });
-    await expect(
       registerAccount(unique().username, email.toUpperCase(), "Hunter22!x"),
-    ).rejects.toMatchObject({ field: "email" });
+    ).rejects.toBeInstanceOf(EmailAlreadyUsedError);
     await expect(loginAccount(email.toUpperCase(), "Hunter22!x")).resolves.toBeDefined();
   });
 });

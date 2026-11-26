@@ -12,3 +12,7 @@ coverage/
 
 # Notes de travail de l'agent (audits, todo, roadmap perso) — jamais commité
 /.perso/
+
+# Planches et rendus de l'atelier des accessoires
+art/accessoires/*.png
+art/accessoires/rendus/

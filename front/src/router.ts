@@ -1,4 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { requiresAccount, signUpFor } from "./lib/access.js";
+import { loadSession } from "./lib/session.js";
 import AppLayout from "./layouts/AppLayout.vue";
 
 const router = createRouter({
@@ -23,6 +25,9 @@ const router = createRouter({
           component: () => import("./pages/TestGame.vue"),
         },
         { path: "classement", name: "ranking", component: () => import("./pages/Ranking.vue") },
+        { path: "amis", name: "friends", component: () => import("./pages/Friends.vue") },
+        { path: "salon/:code?", name: "lobby", component: () => import("./pages/Lobby.vue") },
+        { path: "profil", name: "profile", component: () => import("./pages/Profile.vue") },
         { path: "credits", name: "credits", component: () => import("./pages/Credits.vue") },
         {
           path: "options/:section?",
@@ -51,5 +56,11 @@ const router = createRouter({
     },
   ],
 });
+
+router.beforeEach((to) =>
+  requiresAccount(to.path) && !loadSession()
+    ? signUpFor(to.path === "/amis" ? "amis" : to.path.startsWith("/salon") ? "salon" : "creatif")
+    : true,
+);
 
 export default router;

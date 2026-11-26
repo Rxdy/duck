@@ -54,7 +54,12 @@ function parseJoinTest(value: Record<string, unknown>): JoinTestMessage | null {
   if (width === undefined || height === undefined) return null;
   if (!Array.isArray(map.tiles) || !Array.isArray(map.spawns)) return null;
 
-  return { type: "JOIN_TEST", map: { width, height, tiles: map.tiles, spawns: map.spawns } };
+  const join: JoinTestMessage = {
+    type: "JOIN_TEST",
+    map: { width, height, tiles: map.tiles, spawns: map.spawns },
+  };
+  if (typeof value.token === "string") join.token = value.token;
+  return join;
 }
 
 /**
@@ -91,6 +96,25 @@ export function parseClientMessage(raw: string): ClientMessage | null {
       return parseJoin(value);
     case "JOIN_TEST":
       return parseJoinTest(value);
+    case "LOBBY_CREATE":
+      return typeof value.token === "string" && isGameMode(value.mode)
+        ? { type: "LOBBY_CREATE", token: value.token, mode: value.mode }
+        : null;
+    case "LOBBY_JOIN":
+      return typeof value.token === "string" && typeof value.code === "string"
+        ? { type: "LOBBY_JOIN", token: value.token, code: value.code }
+        : null;
+    case "LOBBY_SETTINGS":
+      return {
+        type: "LOBBY_SETTINGS",
+        mode: isGameMode(value.mode) ? value.mode : undefined,
+        bots: asFiniteNumber(value.bots),
+        botLevel: isBotLevel(value.botLevel) ? value.botLevel : undefined,
+      };
+    case "LOBBY_INVITE":
+      return typeof value.tag === "string" ? { type: "LOBBY_INVITE", tag: value.tag } : null;
+    case "LOBBY_START":
+      return { type: "LOBBY_START" };
     default:
       return null;
   }

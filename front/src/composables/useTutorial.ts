@@ -1,5 +1,6 @@
 import { computed, onUnmounted, ref } from "vue";
 import type { Direction } from "../types.js";
+import { createStepPacer } from "../lib/stepPacer.js";
 import {
   allowedMoves,
   applyStep,
@@ -14,6 +15,9 @@ import {
 const STORAGE_KEY = "duck:tutorial";
 /** Lent exprès : le but est d'apprendre, pas de perdre. */
 const RIVAL_INTERVAL_MS = 850;
+
+/** Le tutoriel a-t-il été terminé dans ce navigateur ? (cadeau de fin, voir useTutorialGift) */
+export const tutorialDone = () => loadCompleted() >= LESSONS.length;
 
 function loadCompleted(): number {
   try {
@@ -47,7 +51,11 @@ export function useTutorial() {
   /** Une leçon s'ouvre quand la précédente est réussie. */
   const isUnlocked = (i: number) => i <= completed.value;
 
+  // Même rythme qu'en partie : une case entière par pas.
+  const pacer = createStepPacer((direction) => walk(direction));
+
   function stop() {
+    pacer.clear();
     clearInterval(timer);
     timer = undefined;
   }
@@ -93,7 +101,9 @@ export function useTutorial() {
     if (task.value.kind === "match") timer = setInterval(rivalTurn, RIVAL_INTERVAL_MS);
   }
 
-  function move(direction: Direction) {
+  const move = (direction: Direction) => pacer.push(direction);
+
+  function walk(direction: Direction) {
     if (phase.value !== "play") return;
     if (!allowedMoves(world.value, task.value).includes(direction)) {
       feedback.value = "Pas par là ! Suis le bouton allumé.";

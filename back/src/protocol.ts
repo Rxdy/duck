@@ -7,9 +7,9 @@ export interface PlayerState {
   id: PlayerId;
   name: string;
   color: string;
-  // Accessoire cosmétique équipé (voir back/src/skins.ts) : "none" pour un
-  // bot ou un joueur non connecté.
-  accessory: string;
+  // Accessoires portés (voir back/src/wardrobe.ts) : vide pour un bot ou un
+  // joueur non connecté.
+  outfit: string[];
   x: number;
   y: number;
   // Position du spawn/base du joueur (constante pour la manche) : transmise
@@ -36,7 +36,7 @@ export interface JoinMessage {
   // en vue d'une fusion vers un vrai compte plus tard.
   anonId: string;
   // Token de session (voir front/src/store/authStore.ts), si connecté :
-  // permet de retrouver le skin équipé du compte (back/src/skins.ts) pour
+  // permet de retrouver la tenue du compte (back/src/wardrobe.ts) pour
   // l'afficher sur le canard en partie. Absent si non connecté.
   token?: string;
   // Mode choisi (voir shared.ts#GAME_MODES) : décide du nombre de joueurs, et
@@ -106,6 +106,8 @@ export interface PingMessage {
  */
 export interface JoinTestMessage {
   type: "JOIN_TEST";
+  /** Session du compte : le créatif n'est pas ouvert aux invités. */
+  token?: string;
   map: {
     width: number;
     height: number;
@@ -150,6 +152,38 @@ export interface WaitingMessage {
   startsInMs: number;
 }
 
-export type ClientMessage = JoinMessage | MoveMessage | PingMessage | JoinTestMessage;
+/** Tout ce qu'on fait dans un salon de partie personnalisée (voir lobby.ts). */
+export type LobbyMessage =
+  | { type: "LOBBY_CREATE"; token: string; mode: GameMode }
+  | { type: "LOBBY_JOIN"; token: string; code: string }
+  | { type: "LOBBY_SETTINGS"; mode?: GameMode; bots?: number; botLevel?: BotLevel }
+  | { type: "LOBBY_INVITE"; tag: string }
+  | { type: "LOBBY_START" };
+
+export interface LobbyState {
+  code: string;
+  mode: GameMode;
+  capacity: number;
+  bots: number;
+  botLevel: BotLevel;
+  botLabel: string;
+  playing: boolean;
+  /** Le premier est l'hôte. */
+  players: { username: string; tag: string }[];
+  /** Codes des amis invités, pas encore entrés. */
+  invited: string[];
+}
+
+export type LobbyServerMessage =
+  { type: "LOBBY"; lobby: LobbyState; you: string } | { type: "LOBBY_CLOSED"; reason: string };
+
+export type ClientMessage =
+  JoinMessage | MoveMessage | PingMessage | JoinTestMessage | LobbyMessage;
 export type ServerMessage =
-  StateMessage | ScoreMessage | EndMessage | MapMessage | ErrorMessage | WaitingMessage;
+  | StateMessage
+  | ScoreMessage
+  | EndMessage
+  | MapMessage
+  | ErrorMessage
+  | WaitingMessage
+  | LobbyServerMessage;

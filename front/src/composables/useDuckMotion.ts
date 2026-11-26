@@ -1,4 +1,14 @@
-import { easeInOut, GLIDE_MS, headingFor, shouldGlide, turnTowards } from "../lib/coincoin.js";
+import {
+  easeInOut,
+  GLIDE_MS,
+  linear,
+  headingFor,
+  shouldGlide,
+  turnTowards,
+} from "../lib/coincoin.js";
+
+/** En deçà de cet écart (réseau, minuteurs), deux pas s'enchaînent. */
+const CHAIN_MS = 45;
 
 /** Au départ le bec est tourné vers +x, visible de face par la caméra isométrique. */
 const INITIAL_HEADING = Math.PI / 2;
@@ -20,10 +30,17 @@ export function createDuckMotion(x: number, y: number) {
   let heading = INITIAL_HEADING;
   let start = -Infinity;
   let duration = GLIDE_MS;
+  let curve = easeInOut;
+
+  /** `since` : temps écoulé depuis la fin du pas précédent, négatif s'il n'est pas fini. */
+  function curveFor(since: number) {
+    // Enchaîné (ou en plein trajet) : vitesse constante. Seul un départ à l'arrêt est adouci.
+    return since <= CHAIN_MS ? linear : easeInOut;
+  }
 
   function poseAt(now: number): Pose {
     const t = duration > 0 ? Math.min(1, Math.max(0, (now - start) / duration)) : 1;
-    const eased = easeInOut(t);
+    const eased = curve(t);
     return {
       x: from.x + (target.x - from.x) * eased,
       y: from.y + (target.y - from.y) * eased,
@@ -40,6 +57,7 @@ export function createDuckMotion(x: number, y: number) {
       from = poseAt(now);
       heading = next;
       if (reducedMotion) from = { ...from, heading };
+      curve = easeInOut;
       start = now;
       duration = reducedMotion ? 0 : GLIDE_MS;
     },
@@ -52,6 +70,7 @@ export function createDuckMotion(x: number, y: number) {
       target = { x: nextX, y: nextY };
       if (shouldGlide(dx, dy)) heading = headingFor(dx, dy)!;
       from = glide ? current : { x: nextX, y: nextY, heading };
+      curve = curveFor(now - (start + duration));
       start = now;
       duration = glide ? GLIDE_MS : 0;
     },

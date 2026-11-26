@@ -2,25 +2,17 @@ import { applyMove, Tile, type GameMap, type GameState } from "./game-engine/ind
 import { BOT_LEVELS, chooseBotDirection, DEFAULT_BOT_LEVEL, type BotLevel } from "./bots.js";
 import type {
   ClientMessage,
+  Direction,
   MapMessage,
   PlayerState,
   ServerMessage,
   WireSpawn,
 } from "./protocol.js";
-import { PLAYER_COLORS } from "./shared.js";
+import { PLAYER_COLORS, STEP_MS } from "./shared.js";
+import { randomBotOutfit } from "./catalog.js";
 import type { GameMode } from "./shared.js";
 import type { MatchResult } from "./db.js";
 import type { WebSocket } from "ws";
-
-// Plancher anti-triche, PAS une vitesse de jeu : marteler la touche est un
-// skill assumé (connaître la carte et enchaîner vite doit payer, voir
-// docs/02-gameplay.md#rythme-de-déplacement), donc on ne plafonne pas le
-// joueur. Un humain culmine autour de 10-14 actions/s ; à 50 ms (20/s) on
-// laisse la marge à tout le monde tout en écartant un client scripté qui
-// enverrait des centaines de MOVE par seconde. Les vrais ralentissements
-// viendront des cases à effet (sable...), en relevant cet intervalle
-// localement pour le joueur concerné.
-const MOVE_FLOOR_MS = 50;
 
 /**
  * Fourni pour une salle de Duel (voir back/src/index.ts) : permet
@@ -39,6 +31,11 @@ export class GameRoom {
   private botTimers: ReturnType<typeof setInterval>[] = [];
   private spawnOrder: WireSpawn[];
   private lastMoveAt = new Map<string, number>();
+  /** Le pas demandé pendant une glissade : il part dès qu'elle finit. Un seul, le dernier. */
+  private pending = new Map<
+    string,
+    { direction: Direction; timer: ReturnType<typeof setTimeout> }
+  >();
   private winScore?: number;
   private matchContext?: MatchContext;
   private ended = false;
@@ -136,11 +133,11 @@ export class GameRoom {
     name: string,
     socket: WebSocket,
     anonId?: string,
-    accessory?: string,
+    outfit?: string[],
   ): void {
     this.startedAt ??= Date.now();
     this.sockets.set(playerId, socket);
-    this.addPlayer(playerId, name, accessory);
+    this.addPlayer(playerId, name, outfit);
     if (anonId) this.anonIds.set(playerId, anonId);
     this.broadcastState();
   }
@@ -193,8 +190,10 @@ export class GameRoom {
     name: string,
     level: BotLevel = DEFAULT_BOT_LEVEL,
     anonId?: string,
+    outfit?: string[],
   ): void {
-    this.addPlayer(playerId, name);
+    // Un bot sans tenue à lui en reçoit une pour la partie, à la mesure de son niveau.
+    this.addPlayer(playerId, name, outfit?.length ? outfit : randomBotOutfit(level));
     // Un bot a un compte (voir botAccounts.ts) : son identifiant anonyme relie
     // la partie à ce compte, donc ses statistiques et son classement vivent
     // exactement comme ceux d'un joueur.
@@ -218,6 +217,7 @@ export class GameRoom {
     this.sockets.delete(playerId);
     this.state.players = this.state.players.filter((p) => p.id !== playerId);
     this.lastMoveAt.delete(playerId);
+    this.forget(playerId);
     this.anonIds.delete(playerId);
     // Plus aucun humain dans la salle : on arrête les bots pour ne pas
     // laisser des intervalles tourner indéfiniment en arrière-plan.
@@ -245,16 +245,46 @@ export class GameRoom {
     if (this.ended) return; // partie déjà terminée : plus aucun coup n'est accepté
     if (Date.now() < this.playableAt) return; // décompte en cours
 
-    if (message.type === "MOVE") {
-      const now = Date.now();
-      const last = this.lastMoveAt.get(playerId) ?? 0;
-      if (now - last < MOVE_FLOOR_MS) return; // plus vite qu'humainement possible : ignoré
-      this.lastMoveAt.set(playerId, now);
+    if (message.type === "MOVE") this.pace(playerId, message.direction);
+  }
 
-      this.state = applyMove(this.state, playerId, message.direction, now);
-      this.broadcastState();
-      this.checkForWinner();
+  /** Un pas à la fois, le temps d'une glissade entière (STEP_MS). */
+  private pace(playerId: string, direction: Direction): void {
+    const queued = this.pending.get(playerId);
+    if (queued) {
+      queued.direction = direction;
+      return;
     }
+    const wait = (this.lastMoveAt.get(playerId) ?? -STEP_MS) + STEP_MS - Date.now();
+    if (wait <= 0) return this.step(playerId, direction);
+
+    const next = {
+      direction,
+      timer: setTimeout(() => {
+        this.pending.delete(playerId);
+        this.step(playerId, next.direction);
+      }, wait),
+    };
+    this.pending.set(playerId, next);
+  }
+
+  private step(playerId: string, direction: Direction): void {
+    if (this.ended) return;
+    const now = Date.now();
+    this.lastMoveAt.set(playerId, now);
+    const before = new Map(this.state.players.map((p) => [p.id, p.immuneUntil]));
+    this.state = applyMove(this.state, playerId, direction, now);
+    // Renvoyé à sa base (touché, ou point marqué) : le pas demandé d'avant ne vaut plus.
+    for (const player of this.state.players) {
+      if (player.immuneUntil !== before.get(player.id)) this.forget(player.id);
+    }
+    this.broadcastState();
+    this.checkForWinner();
+  }
+
+  private forget(playerId: string): void {
+    clearTimeout(this.pending.get(playerId)?.timer);
+    this.pending.delete(playerId);
   }
 
   /**
@@ -271,6 +301,7 @@ export class GameRoom {
 
     this.ended = true;
     this.stopBots();
+    for (const id of [...this.pending.keys()]) this.forget(id);
 
     if (this.matchContext) {
       this.matchContext.onEnd({
@@ -294,7 +325,7 @@ export class GameRoom {
     }
   }
 
-  private addPlayer(playerId: string, name: string, accessory?: string): void {
+  private addPlayer(playerId: string, name: string, outfit: string[] = []): void {
     const spawn = this.findSpawn();
     // La couleur vient du SPAWN, pas du rang d'arrivée : une carte qui
     // n'utilise pas toutes les couleurs (spawn-0/2/3, par exemple) ferait
@@ -308,7 +339,7 @@ export class GameRoom {
       id: playerId,
       name,
       color: PLAYER_COLORS[colorIndex % PLAYER_COLORS.length]!,
-      accessory: accessory ?? "none",
+      outfit,
       x: spawn.x,
       y: spawn.y,
       spawnX: spawn.x,

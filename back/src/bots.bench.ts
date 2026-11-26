@@ -82,7 +82,7 @@ function player(id: string, spawn: { x: number; y: number }): Player {
     id,
     name: id,
     color: "#ffffff",
-    accessory: "none",
+    outfit: [],
     x: spawn.x,
     y: spawn.y,
     spawnX: spawn.x,

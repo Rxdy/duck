@@ -22,6 +22,7 @@ describe("useKeyboardControls", () => {
     const wrapper = mountWithControls(move);
 
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowRight" }));
+    window.dispatchEvent(new KeyboardEvent("keyup", { code: "ArrowRight" }));
     window.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowRight" }));
 
     expect(move).toHaveBeenCalledTimes(2);
@@ -42,6 +43,18 @@ describe("useKeyboardControls", () => {
     }
 
     expect(move).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("ne fait qu'un pas quand deux touches sont enfoncées ensemble", () => {
+    const move = vi.fn();
+    const wrapper = mountWithControls(move);
+
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowUp" }));
+    window.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowRight" }));
+
+    expect(move).toHaveBeenCalledTimes(1);
+    expect(move).toHaveBeenLastCalledWith("UP");
     wrapper.unmount();
   });
 

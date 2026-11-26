@@ -3,6 +3,7 @@ export interface AuthSuccess {
   token: string;
   username: string;
   email: string;
+  tag: string;
 }
 
 export interface AuthFailure {
@@ -53,7 +54,6 @@ export async function fetchGoogleClientId(): Promise<string | undefined> {
   }
 }
 
-/** `identifier` : pseudo ou email, les deux sont uniques et acceptés indifféremment. */
-export function login(identifier: string, password: string): Promise<AuthSuccess | AuthFailure> {
-  return postAuth("/auth/login", { identifier, password });
+export function login(email: string, password: string): Promise<AuthSuccess | AuthFailure> {
+  return postAuth("/auth/login", { email, password });
 }

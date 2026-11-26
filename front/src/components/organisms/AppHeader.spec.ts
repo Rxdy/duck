@@ -1,52 +1,104 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter, RouterLink } from "vue-router";
 import AppHeader from "./AppHeader.vue";
 
+const empty = { template: "<div/>" };
 const router = createRouter({
   history: createMemoryHistory(),
   routes: [
-    { path: "/", component: { template: "<div/>" } },
-    { path: "/compte", component: { template: "<div/>" } },
-    { path: "/connexion", component: { template: "<div/>" } },
-  ],
+    "/",
+    "/profil",
+    "/compte",
+    "/canard",
+    "/amis",
+    "/options",
+    "/credits",
+    "/inscription",
+    "/connexion",
+  ].map((path) => ({ path, component: empty })),
 });
 
-function mountHeader(username?: string) {
-  return mount(AppHeader, { props: { username }, global: { plugins: [router] } });
+function mountHeader(props: { username?: string; friendRequests?: number } = {}) {
+  return mount(AppHeader, { props, global: { plugins: [router] } });
+}
+
+const destinations = (wrapper: ReturnType<typeof mountHeader>) =>
+  wrapper.findAllComponents(RouterLink).map((link) => link.props("to"));
+
+/** Un ordinateur : grand écran et souris. Sans ça, on est sur téléphone. */
+function onDesktop() {
+  vi.stubGlobal("matchMedia", () => ({
+    matches: true,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
 }
 
 describe("AppHeader", () => {
-  it("n'expose qu'UNE porte vers le compte, pas deux", () => {
-    // Il y avait avant une pastille d'initiale ET une vignette canard menant
-    // aux skins : deux boutons pour la même destination, sans qu'on sache
-    // lequel mène où.
-    const wrapper = mountHeader("deeps");
-    const destinations = wrapper.findAllComponents(RouterLink).map((l) => l.props("to"));
-    expect(destinations).toEqual(["/", "/compte"]);
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("sur téléphone, n'a que la marque et le profil, qui mène à sa page", async () => {
+    const wrapper = mountHeader({ username: "deeps" });
+
+    expect(destinations(wrapper)).toEqual(["/", "/profil"]);
+    await wrapper.get("[data-profile]").trigger("click");
+    expect(wrapper.find("nav").exists()).toBe(false);
   });
 
-  it("affiche le pseudo à côté de l'icône quand on est connecté", () => {
-    const wrapper = mountHeader("deeps");
-    expect(wrapper.find('[aria-label="Profil de deeps"]').exists()).toBe(true);
+  it("sur ordinateur, déroule un menu avec tout ce qui n'est pas le jeu", async () => {
+    onDesktop();
+    const wrapper = mountHeader({ username: "deeps" });
+    expect(destinations(wrapper)).toEqual(["/"]);
+
+    await wrapper.get("[data-profile]").trigger("click");
+
+    expect(destinations(wrapper)).toEqual([
+      "/",
+      "/canard",
+      "/compte",
+      "/amis",
+      "/options",
+      "/credits",
+    ]);
+    expect(wrapper.text()).toContain("Se déconnecter");
+  });
+
+  it("propose à un invité de s'inscrire ou se connecter, sans déconnexion", async () => {
+    onDesktop();
+    const wrapper = mountHeader();
+    await wrapper.get("[data-profile]").trigger("click");
+
+    expect(destinations(wrapper)).toEqual([
+      "/",
+      "/inscription",
+      "/connexion",
+      "/options",
+      "/credits",
+    ]);
+    expect(wrapper.text()).not.toContain("Se déconnecter");
+  });
+
+  it("montre le canard en entier sur le bouton, avec le pseudo", () => {
+    const wrapper = mountHeader({ username: "deeps" });
+    expect(wrapper.get("[data-profile] img").attributes("src")).toBe("/ducks/rouge.png");
     expect(wrapper.text()).toContain("deeps");
   });
 
-  it("mène à la connexion quand personne n'est connecté", () => {
-    const wrapper = mountHeader();
-    const destinations = wrapper.findAllComponents(RouterLink).map((l) => l.props("to"));
-    expect(destinations).toEqual(["/", "/connexion"]);
-    expect(wrapper.find('[aria-label="Se connecter"]').exists()).toBe(true);
-  });
-
-  it("propose la déconnexion, mais seulement une fois connecté", () => {
-    expect(mountHeader().find('[aria-label="Se déconnecter"]').exists()).toBe(false);
-    expect(mountHeader("deeps").find('[aria-label="Se déconnecter"]').exists()).toBe(true);
+  it("signale les demandes d'ami reçues", () => {
+    expect(mountHeader({ username: "deeps", friendRequests: 2 }).get("[data-badge]").text()).toBe(
+      "2",
+    );
+    expect(mountHeader({ username: "deeps" }).find("[data-badge]").exists()).toBe(false);
   });
 
   it("laisse la page décider quoi faire de la déconnexion", async () => {
-    const wrapper = mountHeader("deeps");
-    await wrapper.find('[aria-label="Se déconnecter"]').trigger("click");
+    onDesktop();
+    const wrapper = mountHeader({ username: "deeps" });
+    await wrapper.get("[data-profile]").trigger("click");
+    await wrapper.get("nav button").trigger("click");
+
     expect(wrapper.emitted("logout")).toHaveLength(1);
+    expect(wrapper.find("nav").exists()).toBe(false);
   });
 });

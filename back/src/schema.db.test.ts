@@ -7,7 +7,16 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { afterAll, describe, expect, it } from "vitest";
 import { db } from "./db.js";
-import { accountSkins, accounts, maps, matches, sessions, skins } from "./schema.js";
+import {
+  accountItems,
+  accountSkins,
+  accounts,
+  friendships,
+  maps,
+  matches,
+  sessions,
+  skins,
+} from "./schema.js";
 
 /**
  * Tests de la BASE elle-même, distincts des tests qui l'utilisent (auth,
@@ -26,7 +35,16 @@ import { accountSkins, accounts, maps, matches, sessions, skins } from "./schema
  */
 const INIT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "db", "init");
 
-const TABLES: PgTable[] = [accounts, sessions, skins, accountSkins, matches, maps];
+const TABLES: PgTable[] = [
+  accounts,
+  sessions,
+  skins,
+  accountSkins,
+  matches,
+  maps,
+  friendships,
+  accountItems,
+];
 
 const createdAccountIds: string[] = [];
 
@@ -110,16 +128,21 @@ describe("le schéma Drizzle et la base restent alignés", () => {
 });
 
 describe("les garanties de la base", () => {
-  it("refuse deux comptes avec le même pseudo", async () => {
+  it("accepte deux comptes avec le même pseudo, jamais avec le même code joueur", async () => {
     const id = await freshAccount();
     const [existing] = await db.select().from(accounts).where(eq(accounts.id, id));
+    const homonym = () => ({
+      username: existing!.username,
+      email: `autre-${randomUUID()}@example.test`,
+      passwordHash: "x",
+    });
 
+    const [twin] = await db.insert(accounts).values(homonym()).returning();
+    createdAccountIds.push(twin!.id);
+
+    expect(twin!.tag).not.toBe(existing!.tag);
     await expect(
-      db.insert(accounts).values({
-        username: existing!.username,
-        email: `autre-${randomUUID()}@example.test`,
-        passwordHash: "x",
-      }),
+      db.insert(accounts).values({ ...homonym(), tag: existing!.tag }),
     ).rejects.toThrow();
   });
 

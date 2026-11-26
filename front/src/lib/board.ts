@@ -468,6 +468,16 @@ export function zoomBounds(
  */
 export const CLOSE_UP_HALF_VIEW = 3.2;
 
+/**
+ * Zoom affiché à l'avancement `progress` (0 : carte entière, 1 : gros plan).
+ * Départ et arrivée en douceur ; l'interpolation est géométrique pour que le
+ * rapprochement paraisse régulier à l'œil.
+ */
+export function zoomAt(progress: number, target: number): number {
+  const t = Math.min(1, Math.max(0, progress));
+  return Math.pow(target, (1 - Math.cos(Math.PI * t)) / 2);
+}
+
 /** Le zoom fixe qui donne ce gros plan depuis le cadre montrant tout le plateau. */
 export function closeUpZoom(full: FrustumBounds): number {
   const shortHalf = Math.min(full.right - full.left, full.top - full.bottom) / 2;

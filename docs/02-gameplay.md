@@ -12,14 +12,17 @@ Déplacements possibles : **Haut / Bas / Gauche / Droite**.
 
 ## Rythme de déplacement
 
-**Aucun plafond de vitesse.** Marteler la touche est un skill assumé : bien connaître une carte et enchaîner vite doit payer. Le jeu ne cadence donc pas les déplacements, c'est la main du joueur qui le fait.
+**Un pas dure le temps d'une glissade entière : 180 ms par case, pour tout le monde** (décision du 26/11/2026, qui
+remplace « aucun plafond de vitesse »). Marteler la touche ou en enfoncer deux ne fait plus avancer plus vite : le jeu
+se gagne sur le chemin et le moment choisis.
 
-Deux garde-fous, qui ne brident pas le joueur :
-
-- **Une touche maintenue ne vaut qu'un déplacement.** L'auto-repeat du système émet ~25-30 `keydown`/s, bien au-delà de ce qu'un humain martèle (~10-14/s) : le compter reviendrait à récompenser le joueur qui ne fait rien plus que celui qui joue vite. Le client ignore donc les événements `repeat` (voir `front/src/composables/useKeyboardControls.ts`).
-- **Un plancher serveur de 50 ms** (20 actions/s), au-dessus de la vitesse humaine, pour écarter un client scripté (voir `back/src/room.ts`). C'est une protection anti-triche, jamais une règle de jeu.
-
-Les vrais ralentissements viennent (viendront) des **cases à effet** : le sable relève cet intervalle minimum pour le joueur qui s'y trouve — c'est là, et seulement là, que spammer ne sert plus à rien.
+- Le **serveur** impose le rythme (`STEP_MS`), un client modifié n'y échappe pas. Tutoriel et mode libre suivent le
+  même (`front/src/lib/stepPacer.ts`).
+- Un appui pendant la glissade est **gardé** et part dès qu'elle finit ; seul le dernier compte. Il est oublié si le
+  canard est renvoyé à sa base.
+- Une touche maintenue ne vaut qu'un déplacement (`useKeyboardControls.ts`).
+- Deux directions enfoncées ensemble ne font qu'un pas (`front/src/lib/chordGuard.ts`).
+- Les bots restent sous ce rythme, de 500 ms (débutant) à 190 ms (impossible).
 
 ## Marquer des points
 

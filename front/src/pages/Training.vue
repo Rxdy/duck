@@ -3,16 +3,23 @@ import { computed } from "vue";
 import AppButton from "../components/atoms/AppButton.vue";
 import BoardPreview from "../components/organisms/BoardPreview.vue";
 import DirectionPad from "../components/organisms/DirectionPad.vue";
+import MiniMap from "../components/molecules/MiniMap.vue";
+import { useCloseUp } from "../composables/useCloseUp.js";
 import { useKeyboardControls } from "../composables/useKeyboardControls.js";
 import { useTutorial } from "../composables/useTutorial.js";
-import { DUCK_GLOW, DUCK_IMAGES } from "../lib/ducks.js";
+import { useTutorialGift } from "../composables/useTutorialGift.js";
+import { useAuthStore } from "../store/authStore.js";
+import { COACH_IMAGE, DUCK_GLOW } from "../lib/ducks.js";
 import type { TileKind } from "../lib/mapEditor.js";
 import { LESSONS, type Duck } from "../lib/tutorial.js";
 import { useSettingsStore } from "../store/settingsStore.js";
+import { useWardrobeStore } from "../store/wardrobeStore.js";
+import { RIVAL_OUTFIT } from "../lib/tutorial.js";
 import { resolvePlayerColor } from "../lib/colorblind.js";
 import { PLAYER_COLORS } from "../theme.js";
 
 const settings = useSettingsStore();
+const wardrobe = useWardrobeStore();
 const {
   completed,
   phase,
@@ -31,6 +38,12 @@ const {
   backToMenu,
 } = useTutorial();
 useKeyboardControls(move);
+const auth = useAuthStore();
+// Tout le tutoriel terminé : un accessoire au hasard, une fois par compte.
+const gift = useTutorialGift(() => completed.value >= LESSONS.length);
+// Comme en partie : la carte entière pendant l'explication, puis le gros plan.
+// Il reste à la réussite : la caméra ne bouge pas pendant qu'on lit.
+const closeUp = useCloseUp(() => phase.value === "play" || phase.value === "success");
 
 const TILES: Record<string, TileKind> = { "#": "wall", ".": "empty", A: "spawn-0", B: "spawn-1" };
 const tiles = computed(() =>
@@ -46,8 +59,10 @@ const players = computed(() => {
     color: resolvePlayerColor(color, settings.colorblindMode),
     immuneForMs: Math.max(0, duck.immuneUntil - Date.now()),
   });
-  const list = [entry("me", world.value.me, PLAYER_COLORS[0]!)];
-  if (world.value.rival) list.push(entry("rival", world.value.rival, PLAYER_COLORS[1]!));
+  const list = [{ ...entry("me", world.value.me, PLAYER_COLORS[0]!), outfit: wardrobe.outfit }];
+  if (world.value.rival) {
+    list.push({ ...entry("rival", world.value.rival, PLAYER_COLORS[1]!), outfit: RIVAL_OUTFIT });
+  }
   return list;
 });
 
@@ -62,10 +77,10 @@ const hasNext = computed(() => index.value + 1 < LESSONS.length);
   >
     <div class="flex items-center gap-3">
       <img
-        :src="DUCK_IMAGES.vert"
-        :style="{ '--duck-glow': DUCK_GLOW[DUCK_IMAGES.vert] }"
+        :src="COACH_IMAGE"
+        :style="{ '--duck-glow': DUCK_GLOW[COACH_IMAGE] }"
         alt=""
-        class="duck-glow h-14 w-14 short:h-10 short:w-10"
+        class="duck-glow h-20 w-20 short:h-12 short:w-12"
       />
       <div>
         <h1 class="text-xl font-bold">Camp d'entraînement</h1>
@@ -124,30 +139,20 @@ const hasNext = computed(() => index.value + 1 < LESSONS.length);
   <!-- Une étape : le coach, le plateau, les boutons. -->
   <div
     v-else
-    :class="[
-      'flex h-full flex-col gap-2 p-2',
-      phase === 'play'
-        ? 'short:grid short:grid-cols-[6rem_minmax(0,1fr)_6rem] short:grid-rows-2'
-        : '',
-    ]"
+    class="flex h-full flex-col gap-2 p-2 short:grid short:grid-cols-[6rem_minmax(0,1fr)_6rem] short:grid-rows-2"
   >
     <div
-      :class="[
-        'flex min-h-0 flex-1 flex-col gap-2',
-        phase === 'play'
-          ? 'short:col-start-2 short:row-span-2 short:row-start-1'
-          : 'short:flex-row',
-      ]"
+      class="flex min-h-0 flex-1 flex-col gap-2 short:col-start-2 short:row-span-2 short:row-start-1"
     >
       <div
-        class="panel mx-auto flex w-full max-w-xl shrink-0 items-start gap-2 rounded-2xl p-2.5 short:w-2/5 short:self-center"
+        class="panel mx-auto flex h-[10.25rem] w-full max-w-xl shrink-0 items-start gap-2 overflow-y-auto rounded-2xl p-2.5 sm:h-36 short:h-28"
         aria-live="polite"
       >
         <img
-          :src="DUCK_IMAGES.vert"
-          :style="{ '--duck-glow': DUCK_GLOW[DUCK_IMAGES.vert] }"
+          :src="COACH_IMAGE"
+          :style="{ '--duck-glow': DUCK_GLOW[COACH_IMAGE] }"
           alt=""
-          class="duck-glow h-12 w-12 short:h-9 short:w-9"
+          class="duck-glow -ml-1 h-[4.5rem] w-[4.5rem] shrink-0 short:h-12 short:w-12"
         />
         <div class="min-w-0 flex-1">
           <p class="flex items-center justify-between gap-2 text-[11px] text-ink/60">
@@ -165,6 +170,15 @@ const hasNext = computed(() => index.value + 1 < LESSONS.length);
               phase === "intro" ? lesson.intro : phase === "success" ? lesson.success : task.text
             }}
           </p>
+          <template v-if="phase === 'success' && !hasNext">
+            <p v-if="gift" role="status" class="text-xs font-bold text-cyan-400">
+              Tu as gagné : {{ gift }} !
+              <RouterLink to="/canard" class="underline">Le porter</RouterLink>
+            </p>
+            <p v-else-if="!auth.isLoggedIn" class="text-xs font-bold text-cyan-400">
+              Un accessoire t'attend : inscris-toi pour le recevoir.
+            </p>
+          </template>
           <p v-if="phase === 'play' && lesson.tasks.length > 1" class="text-[11px] text-ink/50">
             Consigne {{ taskIndex + 1 }}/{{ lesson.tasks.length }}
           </p>
@@ -195,11 +209,22 @@ const hasNext = computed(() => index.value + 1 < LESSONS.length);
             :tiles="tiles"
             :players="players"
             :marker="target"
+            :close-up="closeUp"
+            follow-id="me"
+          />
+          <MiniMap
+            v-if="closeUp"
+            :width="world.rows[0]!.length"
+            :height="world.rows.length"
+            :tiles="tiles"
+            :players="players"
+            :marker="target"
+            me-id="me"
           />
         </div>
         <p
           v-if="world.rival"
-          class="absolute inset-x-0 bottom-0 text-center text-sm font-bold tabular-nums"
+          class="absolute inset-x-0 top-0 z-10 text-center text-sm font-bold tabular-nums"
         >
           <span :style="{ color: players[0]!.color }">Toi {{ world.me.score }}</span>
           <span class="text-ink/40"> — </span>
@@ -211,8 +236,8 @@ const hasNext = computed(() => index.value + 1 < LESSONS.length);
     <!-- Les boutons restent visibles même à la souris : c'est eux qui montrent
          le sens à prendre. Le clavier marche aussi. -->
     <div
-      v-if="phase === 'play'"
       class="mx-auto grid w-full max-w-md shrink-0 grid-cols-2 gap-2 short:contents"
+      :class="phase === 'play' ? '' : '[&_*]:invisible'"
     >
       <DirectionPad :hint="hint" :haptics-enabled="settings.hapticsEnabled" @move="move" />
     </div>

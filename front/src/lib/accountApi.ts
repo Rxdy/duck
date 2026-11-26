@@ -3,6 +3,7 @@ import { HTTP_URL } from "./serverUrl.js";
 
 export interface AccountProfile {
   username: string;
+  tag: string;
   email: string;
   stats: { played: number; won: number };
 }

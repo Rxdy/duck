@@ -12,6 +12,8 @@ const props = defineProps<{
   tiles: { x: number; y: number; kind: string }[];
   players: { id: string; x: number; y: number; color: string }[];
   meId?: string;
+  /** Case à rejoindre (camp d'entraînement), visible même hors du gros plan. */
+  marker?: { x: number; y: number };
 }>();
 
 // Aplatissement vertical de la vue isométrique de la caméra.
@@ -54,6 +56,12 @@ const outline = computed(() =>
         :key="`${wall.x}-${wall.y}`"
         :points="diamond(wall.x, wall.y)"
         class="fill-slate-500"
+      />
+      <polygon
+        v-if="marker"
+        data-marker
+        :points="diamond(marker.x, marker.y)"
+        class="fill-yellow-300"
       />
       <circle
         v-for="dot in dots"

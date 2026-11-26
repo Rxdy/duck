@@ -38,4 +38,35 @@ describe("createDuckMotion", () => {
     motion.face(-1, 0, 0);
     expect(motion.poseAt(GLIDE_MS)).toMatchObject({ x: 1, y: 1, heading: -Math.PI / 2 });
   });
+
+  it("glisse toujours une case entière, même quand les pas s'enchaînent", () => {
+    const motion = createDuckMotion(1, 1);
+    motion.moveTo(2, 1, 0);
+    motion.moveTo(3, 1, GLIDE_MS);
+    expect(motion.poseAt(GLIDE_MS * 1.5).x).toBeCloseTo(2.5);
+    expect(motion.poseAt(GLIDE_MS * 2).x).toBe(3);
+  });
+
+  it("garde une vitesse constante d'une case à la suivante", () => {
+    const motion = createDuckMotion(1, 1);
+    motion.moveTo(2, 1, 0);
+    motion.moveTo(3, 1, GLIDE_MS);
+    expect(motion.poseAt(GLIDE_MS + GLIDE_MS / 4).x).toBeCloseTo(2.25);
+  });
+
+  it("ne ralentit jamais brusquement quand trois pas s'enchaînent", () => {
+    const motion = createDuckMotion(0, 0);
+    const frame = 1000 / 60;
+    let previous = 0;
+    let step = 0;
+    const speeds: number[] = [];
+    for (let t = 0; t < GLIDE_MS * 3; t += frame) {
+      while (step < 3 && t >= step * GLIDE_MS) motion.moveTo(++step, 0, (step - 1) * GLIDE_MS);
+      const x = motion.poseAt(t).x;
+      speeds.push((x - previous) / (frame / GLIDE_MS));
+      previous = x;
+    }
+    // Passé le démarrage, la vitesse reste à 20 % près de la vitesse constante.
+    for (const speed of speeds.slice(4)) expect(Math.abs(speed - 1)).toBeLessThan(0.21);
+  });
 });

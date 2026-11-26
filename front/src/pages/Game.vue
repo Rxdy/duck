@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useGameStore } from "../store/gameStore.js";
 import { useSettingsStore } from "../store/settingsStore.js";
-import { leaveMatch, searchMatch, sendMove } from "../lib/matchSession.js";
+import { useAuthStore } from "../store/authStore.js";
+import { isModeAllowed, signUpFor } from "../lib/access.js";
+import { leaveMatch, resetGame, searchMatch, sendMove } from "../lib/matchSession.js";
+import { useLobbyStore } from "../store/lobbyStore.js";
 import { useKeyboardControls } from "../composables/useKeyboardControls.js";
 import { resolvePlayerColor } from "../lib/colorblind.js";
 import { wireTileToKind } from "../lib/mapEditor.js";
@@ -25,6 +28,19 @@ import ScoreHud from "../components/organisms/ScoreHud.vue";
 const route = useRoute();
 const store = useGameStore();
 const settings = useSettingsStore();
+const auth = useAuthStore();
+const lobbies = useLobbyStore();
+const lobbyPath = computed(() => (lobbies.lobby ? `/salon/${lobbies.lobby.code}` : undefined));
+// L'adversaire est parti : le serveur a rouvert le salon sans vainqueur.
+watch(
+  () => lobbies.lobby?.playing,
+  (playing, before) => {
+    if (before && playing === false && started.value && !store.winnerId) {
+      lobbies.notice = "Partie interrompue : plus d'adversaire.";
+      void router.push(lobbyPath.value!);
+    }
+  },
+);
 const router = useRouter();
 // Niveau des bots forçable depuis l'URL (?bot=expert) : de quoi comparer une
 // partie contre chaque niveau sans redémarrer le serveur. Absent -> le niveau
@@ -40,11 +56,19 @@ const asked = MODES.includes(route.query.mode as GameMode)
   ? (route.query.mode as GameMode)
   : undefined;
 if (!started.value) {
-  if (asked) searchMatch(asked, botLevel);
-  if (asked || !store.queue) void router.replace("/");
+  if (asked && !isModeAllowed(asked, auth.isLoggedIn)) void router.replace(signUpFor(asked));
+  else {
+    if (asked) searchMatch(asked, botLevel);
+    if (asked || !store.queue) void router.replace("/");
+  }
 }
 
 const move = sendMove;
+
+function quitLobby() {
+  leaveMatch();
+  void router.push("/");
+}
 
 function restart() {
   const queue = store.queue;
@@ -53,9 +77,12 @@ function restart() {
   void router.push("/");
 }
 
-// Quitter l'écran d'une partie commencée, c'est la quitter.
+// Quitter l'écran d'une partie commencée, c'est la quitter. Une partie de salon
+// terminée, elle, ne fait que ranger le plateau : on reste dans le salon.
 onBeforeUnmount(() => {
-  if (started.value) leaveMatch();
+  if (!started.value) return;
+  if (lobbies.lobby && !lobbies.lobby.playing) resetGame();
+  else leaveMatch();
 });
 useKeyboardControls(move);
 
@@ -154,11 +181,20 @@ const rankedPlayers = computed(() =>
       </div>
 
       <div class="flex w-full max-w-xs flex-col gap-2">
-        <div class="flex gap-2">
+        <template v-if="lobbyPath">
+          <p class="text-xs text-ink/60">Partie personnalisée : le classement ne change pas.</p>
+          <AppButton class="text-center" variant="primary" :to="lobbyPath">
+            Retour au salon
+          </AppButton>
+        </template>
+        <div v-else class="flex gap-2">
           <AppButton class="flex-1" variant="primary" @click="restart">Rejouer</AppButton>
           <AppButton class="flex-1" to="/jouer">Changer de mode</AppButton>
         </div>
-        <AppButton class="text-center" to="/">Quitter</AppButton>
+        <AppButton v-if="lobbyPath" class="text-center" @click="quitLobby">
+          Quitter le salon
+        </AppButton>
+        <AppButton v-else class="text-center" to="/">Quitter</AppButton>
       </div>
     </div>
   </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { RankedPlayer } from "../../lib/rankingApi.js";
+import DuckPortrait from "../atoms/DuckPortrait.vue";
 
 defineProps<{ player: RankedPlayer; highlight?: boolean }>();
 </script>
@@ -10,6 +11,7 @@ defineProps<{ player: RankedPlayer; highlight?: boolean }>();
     :class="highlight ? 'border border-cyan-500 bg-cyan-500/15' : 'panel'"
   >
     <span class="w-8 shrink-0 text-sm tabular-nums text-ink/60">{{ player.rank }}</span>
+    <DuckPortrait :outfit="player.outfit" class="h-full max-h-12 w-10 shrink-0 py-0.5" />
     <span class="relative flex-1 truncate text-sm font-semibold">
       {{ player.username }}
       <span v-if="highlight" class="ml-1 text-xs font-normal text-cyan-400">(toi)</span>

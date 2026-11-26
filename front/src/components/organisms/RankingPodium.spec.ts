@@ -5,6 +5,7 @@ import RankingPodium from "./RankingPodium.vue";
 const players = ["Alpha", "Bravo", "Charlie"].map((username, i) => ({
   rank: i + 1,
   username,
+  tag: `A0000${i}`,
   rating: 300 - i,
 }));
 

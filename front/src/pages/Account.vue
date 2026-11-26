@@ -48,7 +48,8 @@ const ratio = computed(() =>
         <h2 class="text-sm font-semibold text-ink/70">Informations</h2>
         <p class="text-sm">
           <span class="text-ink/50">Pseudo</span> ·
-          <span class="font-semibold">{{ profile.username }}</span>
+          <span class="font-semibold">{{ profile.username }}</span
+          ><span class="font-mono text-ink/60">#{{ profile.tag }}</span>
         </p>
         <p class="text-sm"><span class="text-ink/50">Email</span> · {{ profile.email }}</p>
       </section>
@@ -72,13 +73,6 @@ const ratio = computed(() =>
       </section>
 
       <MatchHistory :matches="matches" />
-
-      <RouterLink
-        to="/canard"
-        class="rounded-xl bg-surface p-4 text-sm font-semibold text-ink/70 active:bg-ink/10"
-      >
-        Mes skins →
-      </RouterLink>
     </template>
 
     <p v-else class="text-ink/60">Impossible de charger ton compte pour le moment.</p>

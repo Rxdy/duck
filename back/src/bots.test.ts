@@ -1,3 +1,4 @@
+import { STEP_MS } from "./shared.js";
 import { describe, expect, it } from "vitest";
 import { BOT_LEVELS, chooseBotDirection, firstStepTowards, type BotLevel } from "./bots.js";
 import {
@@ -16,7 +17,7 @@ function player(id: string, x: number, y: number, spawn: [number, number]): Play
     id,
     name: id,
     color: "#FF4D6D",
-    accessory: "none",
+    outfit: [],
     x,
     y,
     spawnX: spawn[0],
@@ -95,11 +96,11 @@ function longTrapState(): GameState {
 }
 
 describe("BOT_LEVELS", () => {
-  it("garde tous les bots sous la vitesse d'un humain qui martèle la touche", () => {
-    // Un humain culmine autour de 10-14 actions/s (voir docs/02-gameplay.md).
+  it("garde tous les bots sous le rythme maximal d'un joueur", () => {
+    // Un pas toutes les STEP_MS au plus, pour tout le monde (voir docs/02-gameplay.md).
     // Un bot plus rapide ne se lirait pas comme fort, mais comme un tricheur.
     for (const [name, level] of Object.entries(BOT_LEVELS)) {
-      expect(level.intervalMs, name).toBeGreaterThanOrEqual(120);
+      expect(level.intervalMs, name).toBeGreaterThanOrEqual(STEP_MS);
     }
   });
 

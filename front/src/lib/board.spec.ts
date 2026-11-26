@@ -16,6 +16,7 @@ import {
   zoomBounds,
   closeUpZoom,
   CLOSE_UP_HALF_VIEW,
+  zoomAt,
 } from "./board.js";
 
 describe("buildBoardTiles", () => {
@@ -344,5 +345,14 @@ describe("closeUpZoom", () => {
 
   it("ne dézoome jamais une carte minuscule", () => {
     expect(closeUpZoom({ left: -2, right: 2, top: 2, bottom: -2 })).toBe(1);
+  });
+});
+
+describe("zoomAt", () => {
+  it("va de la carte entière au gros plan sans à-coup au départ ni à l'arrivée", () => {
+    expect(zoomAt(0, 2)).toBeCloseTo(1);
+    expect(zoomAt(1, 2)).toBeCloseTo(2);
+    expect(zoomAt(0.05, 2) - 1).toBeLessThan(0.01);
+    expect(2 - zoomAt(0.95, 2)).toBeLessThan(0.02);
   });
 });

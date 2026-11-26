@@ -5,6 +5,9 @@ import ModeCard from "../components/molecules/ModeCard.vue";
 import ModalDialog from "../components/molecules/ModalDialog.vue";
 import RuleList from "../components/molecules/RuleList.vue";
 import { DUCK_IMAGES } from "../lib/ducks.js";
+import { isModeAllowed, signUpFor } from "../lib/access.js";
+import { useAuthStore } from "../store/authStore.js";
+import type { GameMode } from "../types.js";
 import MapPreviewList from "../components/molecules/MapPreviewList.vue";
 
 /**
@@ -19,6 +22,9 @@ import MapPreviewList from "../components/molecules/MapPreviewList.vue";
  * "Bientôt" sur la moitié de l'écran donne l'impression d'un jeu vide, et
  * ils reviendront quand ils existeront.
  */
+const auth = useAuthStore();
+const locked = (mode: string) => !isModeAllowed(mode as GameMode, auth.isLoggedIn);
+
 const modes = [
   {
     key: "duel",
@@ -76,13 +82,23 @@ const dialog = ref<{ kind: "maps" | "rules"; mode: (typeof modes)[number] } | nu
   >
     <div class="flex items-center justify-between gap-3">
       <h1 class="text-2xl font-bold">Jouer</h1>
-      <RouterLink
-        to="/entrainement"
-        class="panel flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold"
-      >
-        <i class="accent-icon ri-graduation-cap-fill" aria-hidden="true" />
-        Camp d'entraînement
-      </RouterLink>
+      <div class="flex gap-2">
+        <RouterLink
+          to="/salon"
+          class="panel flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+          :class="auth.isLoggedIn ? '' : 'opacity-50 grayscale'"
+        >
+          <i class="accent-icon ri-group-fill" aria-hidden="true" />
+          Partie perso
+        </RouterLink>
+        <RouterLink
+          to="/entrainement"
+          class="panel flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold"
+        >
+          <i class="accent-icon ri-graduation-cap-fill" aria-hidden="true" />
+          Entraînement
+        </RouterLink>
+      </div>
     </div>
 
     <div class="grid grid-cols-1 gap-3 tiny:gap-2 short:grid-cols-2 short:gap-2 lg:grid-cols-2">
@@ -92,7 +108,8 @@ const dialog = ref<{ kind: "maps" | "rules"; mode: (typeof modes)[number] } | nu
         :label="mode.label"
         :description="mode.desc"
         :ready="true"
-        :to="`/jeu?mode=${mode.key}`"
+        :to="locked(mode.key) ? signUpFor(mode.key) : `/jeu?mode=${mode.key}`"
+        :locked="locked(mode.key)"
         :ducks="mode.ducks"
         :details="details(mode)"
         class="lg:min-h-64"

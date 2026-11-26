@@ -14,12 +14,14 @@ import {
   TILE_SIZE,
   zoomBounds,
   closeUpZoom,
+  zoomAt,
   type FrustumBounds,
   type TerritoryBase,
 } from "../../lib/board.js";
 import type { Direction } from "../../types.js";
 import type { TileKind } from "../../lib/mapEditor.js";
 import CoincoinDuck from "./CoincoinDuck.vue";
+import { ZOOM_MS } from "../../composables/useCloseUp.js";
 
 const props = withDefaults(
   defineProps<{
@@ -31,9 +33,8 @@ const props = withDefaults(
       y: number;
       color: string;
       facing?: Direction;
-      // Accessoire cosmétique équipé (voir lib/duckAccessories.ts). Pas encore
-      // dessiné sur le canard (voir lib/coincoin.ts).
-      accessory?: string;
+      // Accessoires portés (voir lib/accessories/).
+      outfit?: string[];
       // Millisecondes d'intouchabilité restantes (voir back/src/game-engine/
       // game.ts) : fait clignoter le canard concerné.
       immuneForMs?: number;
@@ -123,20 +124,25 @@ function updateCamera() {
   fitCameraToBoard(camera, props.width, props.height, containerAspect.value);
   fullFrame = { left: camera.left, right: camera.right, top: camera.top, bottom: camera.bottom };
   shownFocus = undefined;
-  applyZoom(1);
+  applyZoom(0);
 }
 
 let fullFrame: FrustumBounds = { left: -1, right: 1, top: 1, bottom: -1 };
 let shownFocus: { x: number; y: number } | undefined;
 
-// Le zoom affiché rejoint celui demandé en douceur : le rapprochement se voit.
+// Avancement du rapprochement : 0 montre la carte entière, 1 le gros plan.
+let zoomProgress = 0;
 let shownZoom = 1;
 
-/** `ease` vaut 1 pour se placer d'un coup, moins pour rejoindre le canard en douceur. */
-function applyZoom(ease: number) {
-  const wanted = props.closeUp ? closeUpZoom(fullFrame) : 1;
-  shownZoom += (wanted - shownZoom) * ease;
-  if (Math.abs(wanted - shownZoom) < 0.005) shownZoom = wanted;
+/** Cadre la caméra après `elapsedMs` de plus ; 0 recadre sans avancer. */
+function applyZoom(elapsedMs: number) {
+  const step = settings.reducedMotion && elapsedMs > 0 ? 1 : elapsedMs / ZOOM_MS;
+  zoomProgress = props.closeUp
+    ? Math.min(1, zoomProgress + step)
+    : Math.max(0, zoomProgress - step);
+  shownZoom = zoomAt(zoomProgress, closeUpZoom(fullFrame));
+  // Le suivi du canard garde la même douceur quelle que soit la fréquence d'affichage.
+  const ease = settings.reducedMotion ? 1 : 1 - Math.pow(0.92, elapsedMs / (1000 / 60));
   const player = props.players?.find((p) => p.id === props.followId);
   if (shownZoom <= 1 || !player) {
     Object.assign(camera, fullFrame);
@@ -170,8 +176,13 @@ function reportFollowed() {
   emit("followMoved", next);
 }
 
+let lastFrameAt: number | undefined;
 function follow() {
-  if (props.closeUp || shownZoom > 1) applyZoom(settings.reducedMotion ? 1 : 0.08);
+  const now = performance.now();
+  // Plafonné : après un onglet en arrière-plan, la caméra ne saute pas.
+  const elapsed = Math.min(50, now - (lastFrameAt ?? now));
+  lastFrameAt = now;
+  if (props.closeUp || zoomProgress > 0) applyZoom(elapsed);
   reportFollowed();
   followFrame = requestAnimationFrame(follow);
 }
@@ -300,6 +311,7 @@ function endStroke(event: PointerEvent) {
         :x="player.x"
         :y="player.y"
         :facing="player.facing"
+        :outfit="player.outfit"
         :color="player.color"
         :immune-for-ms="player.immuneForMs ?? 0"
       />

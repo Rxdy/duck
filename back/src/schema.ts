@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { integer, jsonb, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 /**
@@ -31,7 +32,12 @@ export const matches = pgTable("matches", {
  */
 export const accounts = pgTable("accounts", {
   id: uuid("id").primaryKey().defaultRandom(),
-  username: text("username").notNull().unique(),
+  // Libre : plusieurs joueurs peuvent porter le même. C'est `tag` qui les distingue.
+  username: text("username").notNull(),
+  // Code joueur public et unique, attribué par la base (db/init/15-player-tag.sql).
+  tag: text("tag")
+    .notNull()
+    .default(sql`upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 6))`),
   email: text("email").notNull().unique(),
   // NULL pour un compte qui ne se connecte qu'avec Google.
   passwordHash: text("password_hash"),
@@ -51,6 +57,11 @@ export const accounts = pgTable("accounts", {
   // db/init/11-bot-level.sql.
   level: text("level"),
   equippedSkinId: uuid("equipped_skin_id"),
+  // Identifiants des accessoires portés (voir wardrobe.ts).
+  outfit: jsonb("outfit"),
+  // Les tenues enregistrées et le numéro de celle qui est portée.
+  outfitPresets: jsonb("outfit_presets"),
+  activePreset: integer("active_preset").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -112,3 +123,33 @@ export const maps = pgTable("maps", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Reflète db/init/14-friends.sql. L'unicité par paire (dans les deux sens) est portée par la base. */
+export const friendships = pgTable(
+  "friendships",
+  {
+    requesterId: uuid("requester_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    addresseeId: uuid("addressee_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.requesterId, table.addresseeId] })],
+);
+
+/** Reflète db/init/16-wardrobe.sql : les accessoires possédés, jamais deux fois le même. */
+export const accountItems = pgTable(
+  "account_items",
+  {
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    itemId: text("item_id").notNull(),
+    source: text("source").notNull(),
+    acquiredAt: timestamp("acquired_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.accountId, table.itemId] })],
+);

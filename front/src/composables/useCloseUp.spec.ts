@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { effectScope, nextTick, ref } from "vue";
-import { OVERVIEW_MS, useCloseUp } from "./useCloseUp.js";
+import { COUNTDOWN_MS } from "../lib/countdown.js";
+import { OVERVIEW_MS, useCloseUp, ZOOM_MS } from "./useCloseUp.js";
 
 describe("useCloseUp", () => {
   afterEach(() => vi.useRealTimers());
@@ -20,5 +21,9 @@ describe("useCloseUp", () => {
     vi.advanceTimersByTime(OVERVIEW_MS);
     expect(closeUp.value).toBe(true);
     scope.stop();
+  });
+
+  it("finit de se rapprocher avant la fin du décompte", () => {
+    expect(OVERVIEW_MS + ZOOM_MS).toBeLessThanOrEqual(COUNTDOWN_MS);
   });
 });
