@@ -90,6 +90,19 @@ const { visible, scroller, onScroll } = useProgressiveList(
   () => `${filter.value}|${show.value}`,
 );
 
+/** La case « Aucun » : l'emplacement trié est-il libre (ou, sur « Tout », le canard est-il nu) ? */
+const nothingOn = computed(() =>
+  filter.value === "all"
+    ? !draft.value.length
+    : !slots.value.find((s) => s.value === filter.value)?.item,
+);
+
+function putNothing() {
+  if (filter.value !== "all") return put(filter.value, undefined);
+  drafts.value[preset.value] = [];
+  message.value = "";
+}
+
 function put(slot: Slot, id: string | undefined) {
   drafts.value[preset.value] = wear(draft.value, slot, id);
   message.value = "";
@@ -331,6 +344,23 @@ async function clearPreset() {
           class="grid min-h-0 flex-1 grid-cols-3 content-start gap-1.5 overflow-y-auto lg:grid-cols-4"
           @scroll.passive="onScroll"
         >
+          <!-- En tête de chaque liste (sauf quand on ne regarde que ce qui reste à gagner). -->
+          <li v-if="show !== 'locked'">
+            <button
+              type="button"
+              data-none
+              class="flex aspect-square w-full flex-col items-center justify-center gap-0.5 rounded-xl border-2"
+              :class="
+                nothingOn ? 'border-cyan-500 bg-surface' : 'panel border-dashed !border-ink/25'
+              "
+              :aria-label="filter === 'all' ? 'Aucun accessoire' : 'Aucun à cet emplacement'"
+              :aria-pressed="nothingOn"
+              @click="putNothing"
+            >
+              <i class="ri-forbid-2-line text-3xl text-ink/50" aria-hidden="true" />
+              <span class="text-xs font-semibold text-ink/70">Aucun</span>
+            </button>
+          </li>
           <li v-for="item in visible" :key="item.id">
             <button
               type="button"
