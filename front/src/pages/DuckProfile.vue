@@ -90,17 +90,11 @@ const { visible, scroller, onScroll } = useProgressiveList(
   () => `${filter.value}|${show.value}`,
 );
 
-/** La case « Aucun » : l'emplacement trié est-il libre (ou, sur « Tout », le canard est-il nu) ? */
-const nothingOn = computed(() =>
-  filter.value === "all"
-    ? !draft.value.length
-    : !slots.value.find((s) => s.value === filter.value)?.item,
-);
+/** La case « Aucun » vide l'emplacement trié : elle n'a pas de sens sur « Tout ». */
+const nothingOn = computed(() => !slots.value.find((s) => s.value === filter.value)?.item);
 
 function putNothing() {
-  if (filter.value !== "all") return put(filter.value, undefined);
-  drafts.value[preset.value] = [];
-  message.value = "";
+  if (filter.value !== "all") put(filter.value, undefined);
 }
 
 function put(slot: Slot, id: string | undefined) {
@@ -344,8 +338,8 @@ async function clearPreset() {
           class="grid min-h-0 flex-1 grid-cols-3 content-start gap-1.5 overflow-y-auto lg:grid-cols-4"
           @scroll.passive="onScroll"
         >
-          <!-- En tête de chaque liste (sauf quand on ne regarde que ce qui reste à gagner). -->
-          <li v-if="show !== 'locked'">
+          <!-- En tête de la liste d'un emplacement (pas sur « Tout », ni sur ce qui reste à gagner). -->
+          <li v-if="filter !== 'all' && show !== 'locked'">
             <button
               type="button"
               data-none
@@ -353,7 +347,7 @@ async function clearPreset() {
               :class="
                 nothingOn ? 'border-cyan-500 bg-surface' : 'panel border-dashed !border-ink/25'
               "
-              :aria-label="filter === 'all' ? 'Aucun accessoire' : 'Aucun à cet emplacement'"
+              aria-label="Aucun à cet emplacement"
               :aria-pressed="nothingOn"
               @click="putNothing"
             >
