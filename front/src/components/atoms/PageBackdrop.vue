@@ -1,14 +1,19 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref } from "vue";
 import { DUCK_GLOW, DUCK_IMAGES } from "../../lib/ducks.js";
-import { sceneFor } from "../../lib/scenes/noel.js";
+import { editionFor, imagePath, layoutFor } from "../../lib/scenes/calendar.js";
+import type { Device, PageKind } from "../../lib/scenes/types.js";
 import DuckPortrait from "./DuckPortrait.vue";
 
 /**
- * Décor de fond : sur grand écran, des canards posés sur des dalles de chaque côté de la colonne de contenu, qui resterait
- * sinon entourée de vide. Chacun porte un thème tiré au hasard dans le catalogue des accessoires, différent à chaque
- * visite. Purement décoratif.
+ * Décor de fond. En période d'événement (voir lib/scenes/calendar.ts), une grande image habille tout le
+ * fond, composée pour la page et pour le format de l'écran : l'accueil n'a pas la même que le classement,
+ * un téléphone debout n'a pas la même qu'un écran large. Un voile assombrit le milieu, là où se pose le
+ * contenu. Hors événement, sur grand écran : des canards posés sur des dalles de chaque côté, chacun dans
+ * un thème tiré au hasard. Purement décoratif.
  */
+const props = withDefaults(defineProps<{ page?: PageKind }>(), { page: "defaut" });
+
 const SIDES = [
   { color: "#FF4D6D", glow: DUCK_GLOW[DUCK_IMAGES.rouge]!, place: "left-[5%] top-[12%] h-36 w-36" },
   {
@@ -24,14 +29,27 @@ const SIDES = [
   },
 ];
 
-// Une scène de saison remplace les portraits ; ?scene=noel la force hors saison (voir lib/scenes/noel.ts).
-const scene = sceneFor(new Date(), new URLSearchParams(window.location.search).get("scene"));
+// ?scene=noel (ou noel-2026) force un événement hors saison, pour le voir.
+const edition = editionFor(new Date(), new URLSearchParams(window.location.search).get("scene"));
+
+// Le format suit l'écran : on tourne une tablette, l'image change.
+const portrait = window.matchMedia("(orientation: portrait)");
+const device = ref<Device>(portrait.matches ? "portrait" : "paysage");
+const follow = () => (device.value = portrait.matches ? "portrait" : "paysage");
+onMounted(() => portrait.addEventListener("change", follow));
+onUnmounted(() => portrait.removeEventListener("change", follow));
+
+const image = computed(() => {
+  if (!edition) return undefined;
+  const layout = layoutFor(edition, props.page, device.value);
+  return layout ? imagePath(edition, layout) : undefined;
+});
 
 const outfits = ref<string[][]>(SIDES.map(() => []));
 
 onMounted(async () => {
-  // Le décor n'existe qu'à partir de xl : pas de 3D, ni de catalogue chargé, sur un téléphone.
-  if (!window.matchMedia("(min-width: 1280px)").matches) return;
+  // Les portraits n'existent qu'à partir de xl : pas de 3D, ni de catalogue chargé, sur un téléphone.
+  if (image.value || !window.matchMedia("(min-width: 1280px)").matches) return;
   const { randomThemes } = await import("../../lib/backdropOutfits.js");
   outfits.value = randomThemes(SIDES.length);
 });
@@ -39,16 +57,11 @@ onMounted(async () => {
 
 <template>
   <div aria-hidden="true" class="pointer-events-none absolute inset-0 overflow-hidden">
-    <!-- La scène de saison, sur tout le fond (fabriquée par scripts/render-scenes.mjs). Un voile assombrit le milieu,
-         là où se pose le contenu, pour qu'il reste lisible : les décors restent bien visibles sur les côtés. -->
-    <template v-if="scene">
-      <img
-        :src="`/scenes/${scene.id}.jpg`"
-        alt=""
-        class="absolute inset-0 h-full w-full select-none object-cover"
-      />
+    <template v-if="image">
+      <img :src="image" alt="" class="absolute inset-0 h-full w-full select-none object-cover" />
+      <!-- Le voile : plus fort au milieu, où se pose le contenu ; sur un écran étroit, il couvre tout. -->
       <div
-        class="absolute inset-0 bg-surface-deep/60 [background-image:linear-gradient(90deg,transparent_0%,rgb(var(--surface-deep)/0.55)_26%,rgb(var(--surface-deep)/0.55)_74%,transparent_100%)] md:bg-surface-deep/0"
+        class="absolute inset-0 bg-surface-deep/55 md:bg-transparent md:[background-image:linear-gradient(90deg,transparent_0%,rgb(var(--surface-deep)/0.55)_26%,rgb(var(--surface-deep)/0.55)_74%,transparent_100%)]"
       />
     </template>
     <div v-else class="hidden xl:block">

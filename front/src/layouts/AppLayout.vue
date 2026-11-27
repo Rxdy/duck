@@ -2,6 +2,7 @@
 import { computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import PageBackdrop from "../components/atoms/PageBackdrop.vue";
+import type { PageKind } from "../lib/scenes/types.js";
 import MatchmakingBar from "../components/organisms/MatchmakingBar.vue";
 import AppHeader from "../components/organisms/AppHeader.vue";
 import GuestBanner from "../components/molecules/GuestBanner.vue";
@@ -28,9 +29,11 @@ watch([() => route.path, () => auth.session?.token], () => friends.refresh(auth.
 // Les écrans qui occupent toute la largeur avec un plateau se passent de décor.
 const decorated = computed(
   () =>
-    !["home", "game", "test-game", "creative", "training", "training-free"].includes(
-      String(route.name),
-    ),
+    !["game", "test-game", "creative", "training", "training-free"].includes(String(route.name)),
+);
+// Chaque page a son image de fond : l'accueil, le classement, ou la composition des autres.
+const backdropPage = computed<PageKind>(() =>
+  route.name === "home" ? "accueil" : route.name === "ranking" ? "classement" : "defaut",
 );
 // Pas de bandeau pendant qu'on joue, ni sur les pages qui servent déjà à s'identifier.
 const invites = computed(
@@ -54,7 +57,7 @@ const invites = computed(
     <InviteBar />
 
     <main class="relative min-h-0 flex-1">
-      <PageBackdrop v-if="decorated" />
+      <PageBackdrop v-if="decorated" :page="backdropPage" />
       <div class="relative h-full">
         <RouterView />
       </div>

@@ -14,7 +14,7 @@ import {
 import { createCoincoin, type Coincoin } from "../coincoin.js";
 import { dress, type Dressing } from "../outfit.js";
 import { poseAt, type Placement } from "./motion.js";
-import type { SceneDefinition, SceneProp } from "./noel.js";
+import type { Edition, Layout, SceneProp } from "./types.js";
 import {
   cane,
   drift,
@@ -34,8 +34,6 @@ const ELEVATION = (30 * Math.PI) / 180;
 const DISTANCE = 60;
 /** Les canards sont un peu agrandis : ils sont l'attraction, plus que le décor. */
 const DUCK_SCALE = 2;
-/** Largeur de l'image, en cases du monde : toute la scène tient dans ce cadre. */
-const VIEW_UNITS = 29;
 
 interface Actor {
   placement: Placement;
@@ -72,7 +70,7 @@ export interface Stage {
   dispose(): void;
 }
 
-export function createStage(canvas: HTMLCanvasElement, definition: SceneDefinition): Stage {
+export function createStage(canvas: HTMLCanvasElement, edition: Edition, layout: Layout): Stage {
   const renderer = new WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1);
   renderer.setClearColor(0x0f1218, 1);
@@ -93,10 +91,13 @@ export function createStage(canvas: HTMLCanvasElement, definition: SceneDefiniti
   camera.updateMatrixWorld();
 
   const props: Prop[] = [];
-  const ground = floor(definition.size);
+  // Le sol doit couvrir tout le cadre, quel qu'en soit le format : on le dimensionne sur sa diagonale.
+  const unit = layout.width / layout.units;
+  const depthRange = layout.height / unit / Math.sin(ELEVATION);
+  const ground = floor(Math.ceil(2 * Math.hypot(layout.units / 2, depthRange / 2)) + 6);
   props.push(ground);
   scene.add(ground.object);
-  for (const description of definition.props) {
+  for (const description of layout.props) {
     const prop = buildProp(description);
     prop.object.position.set(description.x, 0, description.z);
     if ("turn" in description) prop.object.rotation.y = description.turn ?? 0;
@@ -105,7 +106,7 @@ export function createStage(canvas: HTMLCanvasElement, definition: SceneDefiniti
   }
 
   const actors: Actor[] = [];
-  for (const description of definition.actors) {
+  for (const description of layout.actors) {
     const duck = createCoincoin(description.color);
     const dressing = dress(duck, description.outfit);
     duck.group.scale.setScalar(DUCK_SCALE);
@@ -114,9 +115,10 @@ export function createStage(canvas: HTMLCanvasElement, definition: SceneDefiniti
   }
 
   let snow: Prop | undefined;
-  if (definition.snow) {
-    snow = snowfall(900, { x: 60, z: 60, height: 18 });
-    snow.object.position.set(-30, 0, -30);
+  if (edition.snow) {
+    const reach = Math.ceil(Math.hypot(layout.units, depthRange)) + 8;
+    snow = snowfall(Math.round(reach * 15), { x: reach, z: reach, height: 18 });
+    snow.object.position.set(-reach / 2, 0, -reach / 2);
     scene.add(snow.object);
   }
 
@@ -133,7 +135,7 @@ export function createStage(canvas: HTMLCanvasElement, definition: SceneDefiniti
     },
     resize(width, height) {
       renderer.setSize(width, height, false);
-      const unit = width / VIEW_UNITS;
+      const unit = width / layout.units;
       camera.left = -width / 2 / unit;
       camera.right = width / 2 / unit;
       camera.top = height / 2 / unit;

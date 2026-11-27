@@ -1,22 +1,23 @@
 <!doctype html>
-<!-- Rend une scène de saison pleine page : /atelier/scene.html?scene=noel&w=3200&h=1800&t=2.5
-     Sert à fabriquer public/scenes/*.jpg (scripts/render-scenes.mjs) — pas inclus dans le build du jeu. -->
+<!-- Rend une image de fond : /atelier/scene.html?edition=noel-2026&page=accueil&device=paysage&t=2.5
+     Sert à fabriquer public/scenes/<édition>/*.jpg (scripts/render-scenes.mjs) — pas inclus dans le build du jeu. -->
 <html lang="fr">
   <body style="margin: 0; background: #0f1218">
     <canvas id="c" style="display: block"></canvas>
     <script type="module">
-      import { SCENES } from "/src/lib/scenes/noel.ts";
+      import { EDITIONS } from "/src/lib/scenes/calendar.ts";
       import { createStage } from "/src/lib/scenes/stage.ts";
 
       const q = new URLSearchParams(location.search);
-      const definition = SCENES[q.get("scene") ?? "noel"];
-      const width = Number(q.get("w") ?? 3200);
-      const height = Number(q.get("h") ?? 1800);
+      const edition = EDITIONS.find((e) => e.id === q.get("edition"));
+      const layout = edition.layouts.find(
+        (l) => l.page === q.get("page") && l.device === q.get("device"),
+      );
       const canvas = document.getElementById("c");
-      canvas.style.width = `${width}px`;
-      canvas.style.height = `${height}px`;
-      const stage = createStage(canvas, definition);
-      stage.resize(width, height);
+      canvas.style.width = `${layout.width}px`;
+      canvas.style.height = `${layout.height}px`;
+      const stage = createStage(canvas, edition, layout);
+      stage.resize(layout.width, layout.height);
       stage.render(Number(q.get("t") ?? 2.5));
       window.__done = true;
     </script>

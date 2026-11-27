@@ -1,22 +1,22 @@
 /**
- * Fabrique l'image de fond de chaque saison (front/public/scenes/<scène>.jpg, 3200 x 1800), depuis le
- * catalogue d'accessoires et les décors de front/src/lib/scenes. À relancer après toute modification
- * d'une scène ; l'image est commitée (le jeu n'a pas besoin de WebGL pour l'afficher).
+ * Fabrique les images de fond des événements (front/public/scenes/<édition>/<page>-<format>.jpg), depuis le
+ * catalogue d'accessoires et les éditions de front/src/lib/scenes. À relancer après toute modification
+ * d'une édition ; les images sont commitées (le jeu n'a pas besoin de WebGL pour les afficher, et un
+ * test échoue si l'une manque).
  *
  *   (cd front && npx vite --port 5180) &
  *   npm i --no-save playwright-core            # + un Chromium : npx playwright install chromium
- *   node scripts/render-scenes.mjs [scène]     # noel par défaut ; SERVER, CHROMIUM, OUT en option
+ *   node scripts/render-scenes.mjs [édition [page [format]]]     # tout par défaut ; SERVER, CHROMIUM, OUT en option
  */
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright-core";
 
 const server = process.env.SERVER ?? "http://localhost:5180";
-const scene = process.argv[2] ?? "noel";
-const out =
+const [only, onlyPage, onlyDevice] = process.argv.slice(2);
+const out = (
   process.env.OUT ??
-  new URL("../front/public/scenes/", import.meta.url).pathname;
-const [width, height] = [3200, 1800];
-mkdirSync(out, { recursive: true });
+  new URL("../front/public/scenes/", import.meta.url).pathname
+).replace(/\/$/, "");
 
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM,
@@ -27,15 +27,31 @@ const browser = await chromium.launch({
     "--ignore-gpu-blocklist",
   ],
 });
-const page = await browser.newPage({ viewport: { width, height } });
+const page = await browser.newPage();
 page.on("pageerror", (error) => console.error("page :", error.message));
-await page.goto(
-  `${server}/atelier/scene.html?scene=${scene}&w=${width}&h=${height}&t=2.5`,
-);
-await page.waitForFunction(() => window.__done === true, null, {
-  timeout: 120000,
-});
-const file = `${out.replace(/\/$/, "")}/${scene}.jpg`;
-await page.screenshot({ path: file, type: "jpeg", quality: 84 });
-console.log("écrit", file);
+
+// La liste des compositions vient du code lui-même : rien à tenir à jour ici.
+await page.goto(`${server}/atelier/scene-list.html`);
+await page.waitForFunction(() => window.__list, null, { timeout: 60000 });
+const list = await page.evaluate(() => window.__list);
+
+for (const { edition, page: kind, device, width, height } of list) {
+  if (
+    (only && edition !== only) ||
+    (onlyPage && kind !== onlyPage) ||
+    (onlyDevice && device !== onlyDevice)
+  )
+    continue;
+  await page.setViewportSize({ width, height });
+  await page.goto(
+    `${server}/atelier/scene.html?edition=${edition}&page=${kind}&device=${device}&t=2.5`,
+  );
+  await page.waitForFunction(() => window.__done === true, null, {
+    timeout: 120000,
+  });
+  mkdirSync(`${out}/${edition}`, { recursive: true });
+  const file = `${out}/${edition}/${kind}-${device}.jpg`;
+  await page.screenshot({ path: file, type: "jpeg", quality: 84 });
+  console.log("écrit", file);
+}
 await browser.close();

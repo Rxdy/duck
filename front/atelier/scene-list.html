@@ -1,0 +1,18 @@
+<!doctype html>
+<!-- La liste des images à fabriquer, lue par scripts/render-scenes.mjs — pas inclus dans le build du jeu. -->
+<html lang="fr">
+  <body>
+    <script type="module">
+      import { EDITIONS } from "/src/lib/scenes/calendar.ts";
+      window.__list = EDITIONS.flatMap((e) =>
+        e.layouts.map((l) => ({
+          edition: e.id,
+          page: l.page,
+          device: l.device,
+          width: l.width,
+          height: l.height,
+        })),
+      );
+    </script>
+  </body>
+</html>
