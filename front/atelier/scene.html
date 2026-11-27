@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- Rend un diorama d'une scène de saison, fond transparent : /atelier/scene.html?scene=noel&side=0&t=2.5
+     Sert à fabriquer public/scenes/*.png (scripts/render-scenes.mjs) — pas inclus dans le build du jeu. -->
+<html lang="fr">
+  <body style="margin: 0; background: transparent">
+    <canvas id="c" style="display: block"></canvas>
+    <script type="module">
+      import { SCENES } from "/src/lib/scenes/noel.ts";
+      import { createStage } from "/src/lib/scenes/stage.ts";
+
+      const q = new URLSearchParams(location.search);
+      const definition = SCENES[q.get("scene") ?? "noel"];
+      const width = Number(q.get("w") ?? 1400);
+      const height = Number(q.get("h") ?? 1300);
+      const canvas = document.getElementById("c");
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      const stage = createStage(canvas, definition, {
+        only: Number(q.get("side") ?? 0),
+        preserve: true,
+        pixelRatio: 1,
+      });
+      stage.resize(width, height);
+      stage.render(Number(q.get("t") ?? 2.5));
+      window.__done = true;
+    </script>
+  </body>
+</html>

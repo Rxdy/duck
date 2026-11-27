@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { DUCK_GLOW, DUCK_IMAGES } from "../../lib/ducks.js";
+import { sceneFor } from "../../lib/scenes/noel.js";
 import DuckPortrait from "./DuckPortrait.vue";
 
 /**
@@ -23,6 +24,9 @@ const SIDES = [
   },
 ];
 
+// Une scène de saison remplace les portraits ; ?scene=noel la force hors saison (voir lib/scenes/noel.ts).
+const scene = sceneFor(new Date(), new URLSearchParams(window.location.search).get("scene"));
+
 const outfits = ref<string[][]>(SIDES.map(() => []));
 
 onMounted(async () => {
@@ -35,7 +39,20 @@ onMounted(async () => {
 
 <template>
   <div aria-hidden="true" class="pointer-events-none absolute inset-0 overflow-hidden">
-    <div class="hidden xl:block">
+    <!-- La scène de saison : une image fixe de chaque côté (fabriquée par scripts/render-scenes.mjs). -->
+    <div v-if="scene" class="hidden 2xl:block">
+      <img
+        :src="`/scenes/${scene.id}-gauche.png`"
+        alt=""
+        class="absolute left-[-2%] top-1/2 w-[30vw] max-w-[560px] -translate-y-[44%] select-none"
+      />
+      <img
+        :src="`/scenes/${scene.id}-droite.png`"
+        alt=""
+        class="absolute right-[-2%] top-1/2 w-[30vw] max-w-[560px] -translate-y-[44%] select-none"
+      />
+    </div>
+    <div class="hidden xl:block" :class="{ '2xl:hidden': scene }">
       <div
         v-for="(side, index) in SIDES"
         :key="side.color"
