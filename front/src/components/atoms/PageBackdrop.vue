@@ -23,8 +23,8 @@ const SIDES = [
         :class="side.place"
         :style="{ '--duck-glow': DUCK_GLOW[side.duck] }"
       >
-        <img :src="side.duck" alt="" class="duck-glow h-full w-full object-contain" />
-        <!-- La dalle sur laquelle il est posé, en losange comme le plateau. -->
+        <img :src="side.duck" alt="" class="duck-glow relative z-10 h-full w-full object-contain" />
+        <!-- La dalle sur laquelle il est posé, en losange comme le plateau : derrière lui (z-10 sur l image), sinon elle lui mange les pieds. -->
         <div class="panel -mt-8 h-16 w-16 shrink-0 [transform:scaleY(0.55)_rotate(45deg)]" />
       </div>
     </div>
