@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import * as catalog from "./accessories/accessoires.js";
 import { createCoincoin } from "./coincoin.js";
 import { dress } from "./outfit.js";
-import { collection, randomOutfit, sameOutfit, wear } from "./wardrobe.js";
+import { collection, hasUnsavedOutfit, randomOutfit, sameOutfit, wear } from "./wardrobe.js";
 
 const { ACCESSOIRES, habiller } = catalog;
 // Lu par Vite et non importé : l'image Docker du front se construit sans le dossier du serveur.
@@ -140,5 +140,26 @@ describe("fusion des volumes d'une tenue", () => {
       worn.dispose();
     }
     expect(after).toBeLessThan(before * 0.7);
+  });
+});
+
+describe("hasUnsavedOutfit", () => {
+  const saved = [["a"], ["b"], []];
+
+  it("ne signale rien quand les tenues sont enregistrées", () => {
+    expect(hasUnsavedOutfit([["a"], ["b"], []], saved, ["a"])).toBe(false);
+  });
+
+  it("signale une tenue modifiée, quel que soit son emplacement", () => {
+    expect(hasUnsavedOutfit([["a"], ["b"], ["c"]], saved, ["a"])).toBe(true);
+    expect(hasUnsavedOutfit([["a"], ["b", "c"], []], saved, ["a"])).toBe(true);
+  });
+
+  it("ignore l'ordre des pièces", () => {
+    expect(hasUnsavedOutfit([["x", "y"], ["b"], []], [["y", "x"], ["b"], []], [])).toBe(false);
+  });
+
+  it("ne signale pas une tenue modifiée que le canard porte déjà", () => {
+    expect(hasUnsavedOutfit([["a"], ["b"], ["c"]], saved, ["c"])).toBe(false);
   });
 });

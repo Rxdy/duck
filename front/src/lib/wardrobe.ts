@@ -50,3 +50,16 @@ export function randomOutfit(
 
 export const sameOutfit = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((id) => b.includes(id));
+
+/**
+ * Y a-t-il une tenue en cours de composition qu'on perdrait en quittant la page ? Une tenue modifiée
+ * l'est si elle diffère de celle enregistrée dans son emplacement, sauf quand c'est celle que le
+ * canard porte déjà : elle est alors gardée côté serveur, seule sa place dans la liste est perdue.
+ */
+export function hasUnsavedOutfit(
+  drafts: readonly (readonly string[])[],
+  saved: readonly (readonly string[])[],
+  worn: readonly string[],
+): boolean {
+  return drafts.some((draft, i) => !sameOutfit(draft, saved[i] ?? []) && !sameOutfit(draft, worn));
+}

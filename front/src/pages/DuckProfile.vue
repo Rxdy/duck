@@ -9,6 +9,7 @@ import {
   accessoryById,
   accessoryName,
   collection,
+  hasUnsavedOutfit,
   type Show,
   randomOutfit,
   sameOutfit,
@@ -16,6 +17,7 @@ import {
   wear,
 } from "../lib/wardrobe.js";
 import { useAuthStore } from "../store/authStore.js";
+import { useLeaveGuard } from "../composables/useLeaveGuard.js";
 import { useProgressiveList } from "../composables/useProgressiveList.js";
 import { useWardrobeStore } from "../store/wardrobeStore.js";
 import { PLAYER_COLORS } from "../theme.js";
@@ -66,6 +68,14 @@ void store.refresh(auth.session?.token);
 const draft = computed(() => drafts.value[preset.value]!);
 const unsaved = (i: number) =>
   !!wardrobe.value && !sameOutfit(drafts.value[i]!, wardrobe.value.presets[i]!);
+
+// Quitter avec une tenue modifiée et non enregistrée : on demande avant de la perdre.
+const { asking: leaving, decide: decideLeaving } = useLeaveGuard(
+  () =>
+    !!wardrobe.value &&
+    hasUnsavedOutfit(drafts.value, wardrobe.value.presets, wardrobe.value.outfit),
+);
+
 /** Ce qu'on voit est-il ce que le canard porte ? */
 const wornNow = computed(() => !!wardrobe.value && sameOutfit(draft.value, wardrobe.value.outfit));
 /** L'onglet dont la tenue enregistrée est celle que porte le canard. */
@@ -390,6 +400,16 @@ async function clearPreset() {
       <div class="flex gap-2">
         <AppButton class="flex-1" @click="confirming = false">Annuler</AppButton>
         <AppButton class="flex-1" variant="primary" @click="clearPreset">Vider</AppButton>
+      </div>
+    </ModalDialog>
+    <ModalDialog v-if="leaving" title="Quitter sans enregistrer ?" @close="decideLeaving(false)">
+      <p class="text-sm text-ink/70">
+        Une de tes tenues a été modifiée sans être enregistrée. Si tu pars maintenant, ces
+        changements seront perdus.
+      </p>
+      <div class="flex gap-2">
+        <AppButton class="flex-1" variant="primary" @click="decideLeaving(false)">Rester</AppButton>
+        <AppButton class="flex-1" @click="decideLeaving(true)">Quitter sans enregistrer</AppButton>
       </div>
     </ModalDialog>
   </div>
