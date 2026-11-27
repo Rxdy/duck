@@ -35,7 +35,8 @@ function overflow(outfit: readonly string[], back: boolean) {
 }
 
 describe("cadre fixe du portrait", () => {
-  it("contient le canard nu et chaque pièce, de face et de dos", () => {
+  // Construit les 213 pièces dans deux vues : plus de 5 s sur une machine chargée.
+  it("contient le canard nu et chaque pièce, de face et de dos", { timeout: 60_000 }, () => {
     for (const back of [false, true]) {
       expect(overflow([], back), "canard nu").toBeLessThan(0);
       for (const item of ACCESSOIRES) {
@@ -46,7 +47,7 @@ describe("cadre fixe du portrait", () => {
     }
   });
 
-  it("contient chaque tenue complète (thèmes et tenues de Coincoin)", () => {
+  it("contient chaque tenue complète (thèmes et tenues de Coincoin)", { timeout: 60_000 }, () => {
     const outfits = Object.entries(catalog)
       .filter(([name]) => name.startsWith("THEMES") || name === "TENUES")
       .flatMap(([, list]) => list as catalog.Outfit[]);
