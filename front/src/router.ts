@@ -13,11 +13,25 @@ const router = createRouter({
         { path: "", name: "home", component: () => import("./pages/Home.vue") },
         { path: "jouer", name: "play", component: () => import("./pages/Play.vue") },
         { path: "jeu", name: "game", component: () => import("./pages/Game.vue") },
-        { path: "creatif", name: "creative", component: () => import("./pages/Creative.vue") },
+        {
+          path: "creatif",
+          name: "creative-menu",
+          component: () => import("./pages/CreativeMenu.vue"),
+        },
+        {
+          path: "creatif/editeur",
+          name: "creative",
+          component: () => import("./pages/Creative.vue"),
+        },
         {
           path: "creatif/cartes",
           name: "my-maps",
           component: () => import("./pages/MyMaps.vue"),
+        },
+        {
+          path: "creatif/galerie",
+          name: "gallery",
+          component: () => import("./pages/Gallery.vue"),
         },
         {
           path: "creatif/test",

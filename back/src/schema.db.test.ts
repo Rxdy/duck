@@ -16,6 +16,7 @@ import {
   matches,
   sessions,
   skins,
+  chests,
 } from "./schema.js";
 
 /**
@@ -44,6 +45,7 @@ const TABLES: PgTable[] = [
   maps,
   friendships,
   accountItems,
+  chests,
 ];
 
 const createdAccountIds: string[] = [];

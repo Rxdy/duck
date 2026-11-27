@@ -10,6 +10,8 @@ export default {
         // Grand écran piloté à la souris : les scores peuvent occuper les coins.
         corners: { raw: "(pointer: fine) and (min-width: 768px)" },
         short: { raw: "(orientation: landscape) and (max-height: 560px)" },
+        // Écran large ET haut (tablette, grand moniteur) : de la place pour voir grand.
+        roomy: { raw: "(min-width: 768px) and (min-height: 900px)" },
       },
       // Couleurs SÉMANTIQUES plutôt que littérales : c'est ce qui permet au
       // thème clair d'exister sans repeindre chaque composant à la main. Les

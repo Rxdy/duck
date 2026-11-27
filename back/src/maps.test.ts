@@ -1,14 +1,18 @@
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { eq } from "drizzle-orm";
 import { afterAll, describe, expect, it } from "vitest";
 import { getAccountIdForToken, registerAccount } from "./auth.js";
 import { db } from "./db.js";
 import {
+  copyPublicMap,
   countSpawns,
   deleteMapForAccount,
   listMapsForAccount,
+  listPublicMaps,
   parseTiles,
   saveMapForAccount,
+  setMapPublished,
 } from "./maps.js";
 import { accounts } from "./schema.js";
 
@@ -196,5 +200,102 @@ describe("deleteMapForAccount", () => {
 
     expect(await deleteMapForAccount(intruder, map.id)).toBe(false);
     expect(await listMapsForAccount(owner)).toHaveLength(1);
+  });
+});
+
+describe("galerie", () => {
+  // Une carte officielle : elle passe les règles d'équilibre (voir mapBalance.test.ts).
+  const official = JSON.parse(
+    readFileSync(new URL("../maps/1-map-1v1.json", import.meta.url), "utf8"),
+  ) as { width: number; height: number; tiles: string[][] };
+  const unique = () => `galerie-${randomUUID().slice(0, 8)}`;
+
+  async function savedOfficial(accountId: string, name = unique()) {
+    const { width, height, tiles } = official;
+    return (await saveMapForAccount(accountId, { name, width, height, tiles }))!;
+  }
+
+  it("refuse de publier une carte déséquilibrée, raisons à l'appui", async () => {
+    const owner = await freshAccount();
+    const map = (await saveMapForAccount(owner, {
+      name: unique(),
+      width: 9,
+      height: 7,
+      tiles: grid(9, 7, ["spawn-0", "spawn-1"]),
+    }))!;
+
+    const result = await setMapPublished(owner, map.id, true);
+
+    expect(result.ok).toBe(false);
+    expect(
+      result.ok === false && result.reason === "unbalanced" && result.problems.length,
+    ).toBeTruthy();
+  });
+
+  it("publie une carte équilibrée : elle apparaît dans la galerie avec son auteur", async () => {
+    const owner = await freshAccount();
+    const name = unique();
+    const map = await savedOfficial(owner, name);
+
+    const result = await setMapPublished(owner, map.id, true);
+    expect(result.ok && result.map.published).toBe(true);
+
+    const { maps: found } = await listPublicMaps(name);
+    expect(found.map((m) => m.id)).toEqual([map.id]);
+    expect(found[0]!.author).toMatch(/^mapper-/);
+  });
+
+  it("ne laisse pas publier la carte d'un autre", async () => {
+    const owner = await freshAccount();
+    const intruder = await freshAccount();
+    const map = await savedOfficial(owner);
+
+    expect(await setMapPublished(intruder, map.id, true)).toEqual({
+      ok: false,
+      reason: "not-found",
+    });
+  });
+
+  it("retire de la galerie : la carte n'y est plus", async () => {
+    const owner = await freshAccount();
+    const name = unique();
+    const map = await savedOfficial(owner, name);
+    await setMapPublished(owner, map.id, true);
+
+    await setMapPublished(owner, map.id, false);
+
+    expect((await listPublicMaps(name)).maps).toEqual([]);
+  });
+
+  it("retire de la galerie une carte retouchée qui n'est plus équilibrée", async () => {
+    const owner = await freshAccount();
+    const name = unique();
+    const map = await savedOfficial(owner, name);
+    await setMapPublished(owner, map.id, true);
+
+    const saved = await saveMapForAccount(owner, {
+      id: map.id,
+      name,
+      width: 9,
+      height: 7,
+      tiles: grid(9, 7, ["spawn-0", "spawn-1"]),
+    });
+
+    expect(saved?.published).toBe(false);
+    expect((await listPublicMaps(name)).maps).toEqual([]);
+  });
+
+  it("copie une carte publique chez soi, privée ; jamais une carte privée", async () => {
+    const owner = await freshAccount();
+    const reader = await freshAccount();
+    const map = await savedOfficial(owner);
+
+    expect(await copyPublicMap(reader, map.id)).toBeUndefined();
+    await setMapPublished(owner, map.id, true);
+    const copied = await copyPublicMap(reader, map.id);
+
+    expect(copied?.name).toMatch(/\(copie\)$/);
+    expect(copied?.published).toBe(false);
+    expect((await listMapsForAccount(reader)).map((m) => m.id)).toEqual([copied!.id]);
   });
 });

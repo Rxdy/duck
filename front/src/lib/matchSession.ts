@@ -141,6 +141,8 @@ function handleGameMessage(message: ServerMessage): void {
     store.setError(message.message);
   } else if (message.type === "END") {
     store.setWinner(message.winnerId);
+  } else if (message.type === "CHEST") {
+    store.setChest(message);
   } else if (message.type === "WAITING") {
     store.setWaiting({ capacity: message.capacity, startsInMs: message.startsInMs });
     store.setPlayers(message.players);

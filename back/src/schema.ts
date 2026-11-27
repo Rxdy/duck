@@ -122,6 +122,9 @@ export const maps = pgTable("maps", {
   tiles: jsonb("tiles").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  // Reflète db/init/18-map-gallery.sql : « private » ou « public » (en galerie).
+  visibility: text("visibility").notNull().default("private"),
+  publishedAt: timestamp("published_at", { withTimezone: true }),
 });
 
 /** Reflète db/init/14-friends.sql. L'unicité par paire (dans les deux sens) est portée par la base. */
@@ -153,3 +156,15 @@ export const accountItems = pgTable(
   },
   (table) => [primaryKey({ columns: [table.accountId, table.itemId] })],
 );
+
+/** Reflète db/init/19-chests.sql : les coffres gagnés, en attente, en cours d'ouverture ou ouverts. */
+export const chests = pgTable("chests", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  accountId: uuid("account_id")
+    .notNull()
+    .references(() => accounts.id, { onDelete: "cascade" }),
+  rarity: text("rarity").notNull(),
+  wonAt: timestamp("won_at", { withTimezone: true }).notNull().defaultNow(),
+  unlockStartedAt: timestamp("unlock_started_at", { withTimezone: true }),
+  openedAt: timestamp("opened_at", { withTimezone: true }),
+});

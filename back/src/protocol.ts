@@ -90,6 +90,14 @@ export interface EndMessage {
   winnerId: PlayerId | null;
 }
 
+/**
+ * Au seul vainqueur d'une partie publique, juste après END : le coffre gagné, ou pourquoi il n'y en a
+ * pas (places pleines, plafond du jour atteint). Voir back/src/chests.ts.
+ */
+export type ChestMessage =
+  | { type: "CHEST"; outcome: "won"; rarity: "cuivre" | "argent" | "or" }
+  | { type: "CHEST"; outcome: "full" | "limit" | "complete" };
+
 export interface PingMessage {
   type: "PING";
 }
@@ -183,6 +191,7 @@ export type ServerMessage =
   | StateMessage
   | ScoreMessage
   | EndMessage
+  | ChestMessage
   | MapMessage
   | ErrorMessage
   | WaitingMessage

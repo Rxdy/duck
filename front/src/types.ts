@@ -93,6 +93,13 @@ export interface EndMessage {
   winnerId: string | null;
 }
 
+export type ChestRarity = "cuivre" | "argent" | "or";
+
+/** Au vainqueur seul, après END : son coffre, ou pourquoi il n'en a pas (back/src/chests.ts). */
+export type ChestMessage =
+  | { type: "CHEST"; outcome: "won"; rarity: ChestRarity }
+  | { type: "CHEST"; outcome: "full" | "limit" | "complete" };
+
 /**
  * Lance une partie d'entraînement solo sur une carte custom (éditeur), voir
  * back/src/protocol.ts. `tiles` utilise les valeurs de l'enum Tile côté
@@ -168,6 +175,7 @@ export type ServerMessage =
   | StateMessage
   | ScoreMessage
   | EndMessage
+  | ChestMessage
   | MapMessage
   | ErrorMessage
   | WaitingMessage

@@ -12,11 +12,16 @@ import type { SavedMap } from "../../lib/mapsApi.js";
  * boutons sur la vignette mangeraient l'aperçu qu'on vient justement d'ajouter,
  * et un menu contextuel s'ouvre là où on a touché — donc n'importe où.
  */
-const props = defineProps<{ map: SavedMap }>();
+const props = defineProps<{
+  map: SavedMap;
+  /** Pourquoi la publication a été refusée (carte déséquilibrée). */
+  publishProblems?: string[];
+}>();
 const emit = defineEmits<{
   close: [];
   edit: [];
   preview: [];
+  publish: [published: boolean];
   export: [];
   delete: [];
 }>();
@@ -63,6 +68,28 @@ watch(
           <i class="ri-eye-line text-lg text-ink/60" aria-hidden="true" />
           Voir un aperçu
         </button>
+        <button
+          type="button"
+          class="flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm active:bg-ink/10"
+          @click="emit('publish', !map.published)"
+        >
+          <i
+            class="text-lg text-ink/60"
+            :class="map.published ? 'ri-eye-off-line' : 'ri-earth-line'"
+            aria-hidden="true"
+          />
+          {{ map.published ? "Retirer de la galerie" : "Publier dans la galerie" }}
+        </button>
+        <div
+          v-if="publishProblems?.length"
+          role="status"
+          class="mx-3 rounded-lg bg-amber-400/10 px-3 py-2 text-xs text-amber-300"
+        >
+          <p class="font-semibold">Pas encore publiable :</p>
+          <ul class="list-disc pl-4">
+            <li v-for="problem in publishProblems" :key="problem">{{ problem }}</li>
+          </ul>
+        </div>
         <button
           type="button"
           class="flex items-center gap-3 rounded-lg px-3 py-3 text-left text-sm active:bg-ink/10"

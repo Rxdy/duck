@@ -16,7 +16,13 @@ import type { SavedMap } from "../../lib/mapsApi.js";
  * dépasserait le nombre de contextes WebGL qu'un navigateur accorde, et les
  * cartes s'éteindraient les unes après les autres (voir lib/mapThumbnail.ts).
  */
-const props = defineProps<{ map: SavedMap }>();
+const props = defineProps<{
+  map: Pick<SavedMap, "name" | "width" | "height" | "tiles" | "spawnCount">;
+  /** Seconde ligne à la place du mode : l'auteur, dans la galerie. */
+  subtitle?: string;
+  /** Pastille sur la vignette : « Publiée » dans Mes cartes. */
+  badge?: string;
+}>();
 const emit = defineEmits<{ open: [] }>();
 
 const thumbnail = ref<string | undefined>();
@@ -58,6 +64,12 @@ const size = computed(() => `${props.map.width - 2}×${props.map.height - 2}`);
       </div>
 
       <span
+        v-if="badge"
+        class="absolute left-1.5 top-1.5 rounded bg-cyan-500 px-1.5 py-0.5 text-[11px] font-semibold text-slate-950"
+      >
+        {{ badge }}
+      </span>
+      <span
         class="absolute bottom-1.5 right-1.5 rounded bg-surface-deep/80 px-1.5 py-0.5 text-[11px] text-ink/70"
       >
         {{ size }}
@@ -66,7 +78,9 @@ const size = computed(() => `${props.map.width - 2}×${props.map.height - 2}`);
 
     <div class="flex flex-col gap-0.5 px-3 py-2">
       <span class="truncate text-sm font-semibold">{{ map.name }}</span>
-      <span class="truncate text-[11px] text-ink/40">{{ playableLabel(map.spawnCount) }}</span>
+      <span class="truncate text-[11px] text-ink/40">
+        {{ subtitle ?? playableLabel(map.spawnCount) }}
+      </span>
     </div>
   </button>
 </template>

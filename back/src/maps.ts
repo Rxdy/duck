@@ -1,6 +1,8 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import { db } from "./db.js";
-import { maps } from "./schema.js";
+import { Tile, type GameMap } from "./game-engine/index.js";
+import { auditBalance } from "./mapBalance.js";
+import { accounts, maps } from "./schema.js";
 
 const SPAWN_KINDS = ["spawn-0", "spawn-1", "spawn-2", "spawn-3"];
 const TILE_KINDS = new Set(["wall", "empty", ...SPAWN_KINDS]);
@@ -17,6 +19,20 @@ export interface PlayerMap {
   tiles: string[][];
   spawnCount: number;
   updatedAt: string;
+  /** En galerie : visible et jouable par tous. */
+  published: boolean;
+}
+
+/** Une carte de la galerie : ce qu'il faut pour la montrer et la jouer, avec son auteur. */
+export interface PublicMap {
+  id: string;
+  name: string;
+  author: string;
+  width: number;
+  height: number;
+  tiles: string[][];
+  spawnCount: number;
+  publishedAt: string;
 }
 
 export interface MapInput {
@@ -95,9 +111,11 @@ export async function saveMapForAccount(
   };
 
   if (input.id) {
+    // Retouchée et devenue déséquilibrée, une carte publiée quitte la galerie.
+    const stillPublishable = publicationProblems(tiles).length === 0;
     const [updated] = await db
       .update(maps)
-      .set(values)
+      .set(stillPublishable ? values : { ...values, visibility: "private", publishedAt: null })
       .where(and(eq(maps.id, input.id), eq(maps.ownerAccountId, accountId)))
       .returning();
     return updated ? toPlayerMap(updated) : undefined;
@@ -125,5 +143,119 @@ function toPlayerMap(row: typeof maps.$inferSelect): PlayerMap {
     tiles: row.tiles as string[][],
     spawnCount: row.spawnCount,
     updatedAt: row.updatedAt.toISOString(),
+    published: row.visibility === "public",
   };
+}
+
+/** La grille de l'éditeur vue par le moteur, pour en vérifier l'équilibre. */
+export function toGameMap(tiles: string[][]): GameMap {
+  return {
+    width: tiles[0]?.length ?? 0,
+    height: tiles.length,
+    tiles: tiles.map((row) =>
+      row.map((cell) =>
+        cell === "wall" ? Tile.Wall : cell.startsWith("spawn-") ? Tile.Spawn : Tile.Empty,
+      ),
+    ),
+  };
+}
+
+/**
+ * Ce qui empêche de publier une carte : la galerie ne doit montrer que des cartes jouables (2 ou 4
+ * bases) et équilibrées (mêmes règles que les cartes officielles, voir mapBalance.ts). Vide = publiable.
+ */
+export function publicationProblems(tiles: string[][]): string[] {
+  const spawns = countSpawns(tiles);
+  if (spawns !== 2 && spawns !== 4) return ["il faut 2 ou 4 bases"];
+  return auditBalance(toGameMap(tiles)).map((p) => p.reason);
+}
+
+export type PublishResult =
+  | { ok: true; map: PlayerMap }
+  | { ok: false; reason: "not-found" }
+  | { ok: false; reason: "unbalanced"; problems: string[] };
+
+/** Publie ou retire de la galerie une carte du compte. */
+export async function setMapPublished(
+  accountId: string,
+  mapId: string,
+  published: boolean,
+): Promise<PublishResult> {
+  const [row] = await db
+    .select()
+    .from(maps)
+    .where(and(eq(maps.id, mapId), eq(maps.ownerAccountId, accountId), eq(maps.kind, "player")));
+  if (!row) return { ok: false, reason: "not-found" };
+  if (published) {
+    const problems = publicationProblems(row.tiles as string[][]);
+    if (problems.length) return { ok: false, reason: "unbalanced", problems };
+  }
+  const [updated] = await db
+    .update(maps)
+    .set({
+      visibility: published ? "public" : "private",
+      // Republier ne la remet pas en tête : la date est celle de la première publication.
+      publishedAt: published ? (row.publishedAt ?? new Date()) : null,
+    })
+    .where(eq(maps.id, mapId))
+    .returning();
+  return { ok: true, map: toPlayerMap(updated!) };
+}
+
+export const GALLERY_PAGE_SIZE = 24;
+
+/** Les cartes publiques, les plus récentes d'abord ; `search` filtre sur le nom ou l'auteur. */
+export async function listPublicMaps(
+  search = "",
+  page = 0,
+): Promise<{ maps: PublicMap[]; hasMore: boolean }> {
+  const term = search.trim().slice(0, 40);
+  const pattern = `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const rows = await db
+    .select({ map: maps, author: accounts.username })
+    .from(maps)
+    .innerJoin(accounts, eq(accounts.id, maps.ownerAccountId))
+    .where(
+      and(
+        eq(maps.visibility, "public"),
+        eq(maps.kind, "player"),
+        term
+          ? sql`(${ilike(maps.name, pattern)} or ${ilike(accounts.username, pattern)})`
+          : undefined,
+      ),
+    )
+    .orderBy(desc(maps.publishedAt))
+    .limit(GALLERY_PAGE_SIZE + 1)
+    .offset(Math.max(0, Math.floor(page)) * GALLERY_PAGE_SIZE);
+  return {
+    hasMore: rows.length > GALLERY_PAGE_SIZE,
+    maps: rows.slice(0, GALLERY_PAGE_SIZE).map(({ map, author }) => ({
+      id: map.id,
+      name: map.name,
+      author,
+      width: map.width,
+      height: map.height,
+      tiles: map.tiles as string[][],
+      spawnCount: map.spawnCount,
+      publishedAt: (map.publishedAt ?? map.updatedAt).toISOString(),
+    })),
+  };
+}
+
+/** Copie une carte de la galerie dans les cartes du compte, privée, pour la jouer ou la retoucher. */
+export async function copyPublicMap(
+  accountId: string,
+  mapId: string,
+): Promise<PlayerMap | undefined> {
+  const [source] = await db
+    .select()
+    .from(maps)
+    .where(and(eq(maps.id, mapId), eq(maps.visibility, "public"), eq(maps.kind, "player")));
+  if (!source) return undefined;
+  return saveMapForAccount(accountId, {
+    name: `${source.name} (copie)`.slice(0, 80),
+    width: source.width,
+    height: source.height,
+    tiles: source.tiles,
+  });
 }

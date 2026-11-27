@@ -1,56 +1,57 @@
-# Pièces, lots et accessoires
+# Coffres et accessoires
 
-**Statut :** les accessoires en jeu, la garde-robe et les deux cadeaux sont développés (étapes 1 et 2). Les pièces,
-les lots et l'album restent à faire ; leurs montants sont des réglages de départ, à ajuster avec de vraies parties.
+**Statut :** les accessoires en jeu, la garde-robe, les deux cadeaux et les coffres sont développés (coffres :
+`back/src/chests.ts`, `db/init/19-chests.sql`, places sur l'accueil). L'album reste à faire. Les coffres remplacent les pièces et les lots prévus au départ (décision du 27/11/2026) : il n'y a pas de
+monnaie.
 
 ## Décidé
 
-- On **dépense un montant fixe** de pièces de monnaie et on gagne **un accessoire au hasard**. Le joueur ne le
-  choisit pas.
-- Un accessoire déjà gagné ne peut pas être regagné.
-- Il mélange ensuite librement les accessoires qu'il possède.
-- Pas d'argent réel pour l'instant.
+- **Une victoire donne un coffre.** Seul le 1er gagne un coffre, en Duel comme en FFA. Aucun bonus pour la première
+  victoire du jour.
+- Le coffre a une rareté, tirée au hasard. Il s'ouvre après un temps d'attente, puis révèle ses accessoires.
+- Un accessoire déjà gagné ne peut pas être regagné. Il mélange ensuite librement les accessoires qu'il possède.
+- Pas d'argent réel.
 - Les parties personnalisées ne comptent pas au classement.
 
 ## La boucle
 
 ```
-Jouer une partie publique  →  gagner des pièces  →  ouvrir un lot (100)
-        ↑                                                   ↓
-        └──────────  porter son canard  ←  garde-robe  ←  nouvel accessoire
+Gagner une partie publique  →  un coffre  →  lancer son ouverture  →  attendre  →  l'ouvrir
+        ↑                                                                            ↓
+        └──────────────  porter son canard  ←  garde-robe  ←  nouveaux accessoires  ←┘
 ```
 
-Dans la suite, « pièces » désigne la monnaie et « accessoire » un objet à porter.
+## 1. Les coffres
 
-## 1. Gagner des pièces
+| Coffre | Chance | Temps d'ouverture | Accessoires |
+|---|---|---|---|
+| Cuivre | 75 % | 5 min | 1 |
+| Argent | 20 % | 30 min | 3 |
+| Or | 5 % | 1 h | 5 |
 
-| Résultat | Duel | FFA 4 |
-|---|---|---|
-| 1er | 30 | 35 |
-| 2e | 10 | 20 |
-| 3e | | 15 |
-| 4e | | 10 |
+- **4 places.** Avec 4 coffres en attente, une victoire ne donne rien ; l'écran de fin le dit.
+- **Une seule ouverture à la fois.** Le joueur choisit le coffre à lancer ; les autres attendent leur tour.
+- Le temps écoulé, le coffre est **prêt** : un appui l'ouvre et révèle ses accessoires.
+- En moyenne : 1,6 accessoire et 13 minutes d'attente par coffre.
 
-- La moyenne est de 20 pièces par partie à niveau égal, dans les deux modes.
-- **Première victoire du jour : +50.**
-- Comptes uniquement. Les parties d'un invité ne rapportent pas de pièces, même après son inscription.
-- Aucun gain : partie personnalisée, entraînement, test de carte.
+## 2. Ce qui donne un coffre
 
-Contre les abus (les parties publiques sont complétées par des bots, donc faciles à enchaîner) :
+- Une **victoire** (1re place) dans une **partie publique**, avec un **compte**.
+- Rien pour : un invité, une partie personnalisée, l'entraînement, un test de carte.
+- Contre les abus (les parties publiques sont complétées par des bots, donc faciles à enchaîner) :
+  - seules les **15 premières parties du jour** peuvent donner un coffre ;
+  - rien si on quitte avant la fin, ou si on a presque pas joué (moins de 20 déplacements) ;
+  - le serveur décide seul.
+- Le « jour » commence à minuit, heure de Paris.
 
-- seules les **15 premières parties du jour** rapportent ;
-- aucun gain si on quitte avant la fin, ou si on n'a presque pas joué (moins de 20 déplacements) ;
-- le serveur calcule seul les gains.
+## Le tirage
 
-Le « jour » commence à minuit, heure de Paris.
-
-## 2. Ouvrir un lot
-
-- La dépense est d'un **montant fixe : 100 pièces**, soit environ 5 parties.
-- On gagne **un accessoire au hasard**.
-- **On ne peut pas regagner un accessoire** : le tirage ne porte que sur ceux qu'on ne possède pas.
-- Tous les accessoires restants ont **la même chance** : pas de rareté.
-- Quand on possède tout, le bouton est désactivé : on ne paie jamais pour rien.
+- Le serveur tire la rareté à la victoire, et les accessoires **à l'ouverture** : un accessoire ajouté au catalogue
+  entre temps peut sortir.
+- **Jamais un accessoire déjà possédé.** Tous ceux qui restent ont la même chance : la rareté porte sur le coffre, pas
+  sur les accessoires.
+- S'il en reste moins que le coffre n'en donne, on reçoit ce qui reste. Quand on possède tout, on ne gagne plus de
+  coffre.
 
 ## 3. Les deux accessoires gratuits
 
@@ -59,7 +60,7 @@ Le « jour » commence à minuit, heure de Paris.
 | Inscription | 1 accessoire au hasard |
 | Fin du tutoriel | 1 accessoire au hasard |
 
-Rien d'autre n'est offert. Comme dans un lot, on ne reçoit jamais un accessoire déjà possédé.
+Rien d'autre n'est offert. Comme dans un coffre, on ne reçoit jamais un accessoire déjà possédé.
 
 - Chaque cadeau n'est donné qu'**une fois par compte**.
 - Un invité qui termine le tutoriel reçoit ce cadeau à son inscription, depuis le même navigateur : il a alors 2
@@ -72,17 +73,15 @@ accessoires (`db/init/16-wardrobe.sql`).
 
 ## 4. Combien de temps pour tout avoir
 
-Calcul pour le catalogue actuel de **213 accessoires** à gagner : une fois les 2 cadeaux reçus, il reste 211 lots, soit
-21 100 pièces, à 20 pièces par partie en moyenne, bonus du jour obtenu chaque jour. Le catalogue grandit encore.
+Pour le catalogue actuel de **213 accessoires**, une fois les 2 cadeaux reçus il en reste 211, soit environ 132 coffres.
 
-| Rythme | Pièces par jour | Lots par semaine | Tout le catalogue |
+| Rythme | Victoires par jour (environ) | Accessoires par jour | Tout le catalogue |
 |---|---|---|---|
-| 3 parties par jour | 110 | environ 8 | 192 jours |
-| 5 parties par jour | 150 | environ 10 | 141 jours |
-| 15 parties par jour (plafond) | 350 | environ 24 | 61 jours |
+| 3 parties par jour | 1,5 | 2,4 | environ 90 jours |
+| 15 parties par jour (plafond) | 7 | 11 | environ 20 jours |
 
-Un joueur qui gagne moins, ou pas tous les jours, mettra plus longtemps. Le catalogue doit encore grandir (70 thèmes
-faits sur 90). Les accessoires de visage restent peu nombreux : à compléter.
+Un gros joueur est freiné par les 4 places et l'ouverture une à une. Ce rythme est accepté : **le catalogue devra
+grandir** (70 thèmes faits sur 90, accessoires de visage peu nombreux).
 
 ## 5. Les écrans
 
@@ -101,13 +100,15 @@ faits sur 90). Les accessoires de visage restent peu nombreux : à compléter.
 - Profil : une page en sections sur téléphone et tablette, un menu déroulant sur ordinateur.
 - 3 tenues enregistrables ; la tenue portée est visible en partie.
 
-**Lot** (depuis la garde-robe)
+**Coffres** (accueil, en bas)
 
-- Solde, prix, nombre d'accessoires restant à découvrir.
-- « Ouvrir un lot », puis une courte révélation (passable, réduite si les animations le sont).
-- Ensuite : « L'essayer » ou « Ouvrir un autre ».
+- 4 places, toujours visibles, sans texte d'explication : vide, en attente, en cours (temps restant), prêt.
+- Appui sur un coffre en attente : lancer son ouverture (refusé si une autre est en cours).
+- Appui sur un coffre prêt : la révélation, courte et passable (réduite si les animations le sont). Ensuite :
+  « Garde-robe », qui y mène.
+- La page tient à l'écran sans défiler, sur téléphone comme sur ordinateur.
 
-**Fin de partie** : les pièces gagnées, et ce qu'il manque avant le prochain lot.
+**Fin de partie** : le coffre gagné, ou « Tes 4 places sont pleines ».
 
 **Album de collection** (validé)
 
@@ -122,38 +123,34 @@ compté qu'une fois au total.
 
 ## 6. Côté serveur
 
-Le navigateur ne décide de rien : ni du solde, ni du tirage, ni de la tenue.
+Le navigateur ne décide de rien : ni du coffre, ni du temps, ni du tirage, ni de la tenue.
 
 | Donnée | Contenu |
 |---|---|
 | Catalogue | identifiant, emplacement |
 | Possessions | compte, accessoire, date (un accessoire au plus une fois par compte) |
-| Mouvements de pièces | compte, montant, motif, date ; le solde en est la somme |
+| Coffres | compte, rareté, gagné le, ouverture lancée le (vide sinon), ouvert le (vide sinon), partie d'origine |
 | Tenue | compte, un accessoire par emplacement |
 
-- Ouvrir un lot se fait en **une seule transaction, compte verrouillé** : vérifier le solde, débiter,
-  tirer, attribuer. Deux clics simultanés ne dépensent pas deux fois les mêmes pièces.
-- Chaque demande porte un identifiant unique : renvoyée après une coupure, elle redonne le même résultat sans
-  redébiter.
+- Le temps se calcule sur l'horloge du serveur : changer l'heure du téléphone ne fait rien.
+- Lancer et ouvrir se font en **une transaction, compte verrouillé** : deux appuis simultanés ne lancent pas deux
+  ouvertures, n'ouvrent pas deux fois le même coffre.
+- Une partie ne donne qu'un coffre (contrainte sur la partie d'origine).
 - Hasard produit par le serveur avec un générateur sûr (`crypto.randomInt`).
 - Une tenue n'est acceptée que si le compte possède chaque accessoire, au bon emplacement.
 - Migrations uniquement additives.
 
 ## 7. Si un jour on vend
 
-Vendre des lots au hasard, ou des pièces servant à les ouvrir, est encadré ou interdit selon les pays, avec un enjeu
-particulier pour les mineurs. Il faudrait un avis juridique avant. Une vente directe d'accessoires choisis serait un
-autre modèle.
+Vendre des coffres au hasard, ou de quoi accélérer leur ouverture, est encadré ou interdit selon les pays, avec un
+enjeu particulier pour les mineurs. Il faudrait un avis juridique avant. Une vente directe d'accessoires choisis serait
+un autre modèle.
 
 ## 8. Ordre de réalisation
 
-1. Intégrer les accessoires au jeu (affichage en partie, performances sur téléphone).
-2. Garde-robe et tenue enregistrée.
-3. Pièces : gains, plafond, historique.
-4. Lots : tirage et révélation.
+1. Intégrer les accessoires au jeu (affichage en partie, performances sur téléphone). Fait.
+2. Garde-robe et tenue enregistrée. Fait.
+3. Coffres : gain à la victoire, plafond, ouverture, tirage.
+4. Coffres à l'accueil et révélation ; coffre à la fin de partie.
 5. Album de collection.
-
-## À valider
-
-- [ ] Prix et gains : 100 par lot, environ 20 par partie, +50 à la première victoire du jour.
-- [ ] Plafond de 15 parties rémunérées par jour.
+6. Agrandir le catalogue.

@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { toPlacedTiles } from "../lib/mapEditor.js";
-import { deleteMyMap, fetchMyMaps, saveMyMap, type SavedMap } from "../lib/mapsApi.js";
+import {
+  deleteMyMap,
+  fetchMyMaps,
+  publishMyMap,
+  saveMyMap,
+  type SavedMap,
+} from "../lib/mapsApi.js";
 import { exportMapAsFile, parseImportedMap, readMapFile } from "../lib/mapShare.js";
 import { releaseThumbnailRenderer } from "../lib/mapThumbnail.js";
 import { useAuthStore } from "../store/authStore.js";
@@ -36,12 +42,28 @@ onMounted(refresh);
 onUnmounted(releaseThumbnailRenderer);
 
 function handleEdit() {
-  if (selectedId.value) router.push({ path: "/creatif", query: { load: selectedId.value } });
+  if (selectedId.value)
+    router.push({ path: "/creatif/editeur", query: { load: selectedId.value } });
 }
 
 function handlePreview() {
   previewedId.value = selectedId.value;
   selectedId.value = null;
+}
+
+const publishProblems = ref<string[]>([]);
+watch(selectedId, () => (publishProblems.value = []));
+
+async function handlePublish(published: boolean) {
+  const id = selectedId.value;
+  if (!auth.session || !id) return;
+  const outcome = await publishMyMap(auth.session.token, id, published);
+  if (outcome.ok) {
+    savedMaps.value = savedMaps.value.map((m) => (m.id === id ? outcome.map : m));
+    selectedId.value = null;
+  } else {
+    publishProblems.value = outcome.problems;
+  }
 }
 
 async function handleDelete() {
@@ -121,7 +143,13 @@ async function handleImport(event: Event) {
          voit qu'une carte et demie par écran, et « Mes cartes » devient un
          défilement. À trois, le plateau n'est plus qu'une silhouette. -->
     <div v-if="savedMaps.length > 0" class="grid grid-cols-2 gap-3 overflow-y-auto pb-2">
-      <MapCard v-for="map in savedMaps" :key="map.id" :map="map" @open="selectedId = map.id" />
+      <MapCard
+        v-for="map in savedMaps"
+        :key="map.id"
+        :map="map"
+        :badge="map.published ? 'Publiée' : undefined"
+        @open="selectedId = map.id"
+      />
     </div>
 
     <p v-else-if="auth.session" class="text-center text-xs text-ink/40">
@@ -131,9 +159,11 @@ async function handleImport(event: Event) {
     <MapActionSheet
       v-if="selected"
       :map="selected"
+      :publish-problems="publishProblems"
       @close="selectedId = null"
       @edit="handleEdit"
       @preview="handlePreview"
+      @publish="handlePublish"
       @export="handleExport"
       @delete="handleDelete"
     />

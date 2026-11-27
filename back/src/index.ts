@@ -38,7 +38,14 @@ import {
   savePreset,
   wearOutfit,
 } from "./wardrobe.js";
-import { deleteMapForAccount, listMapsForAccount, saveMapForAccount } from "./maps.js";
+import {
+  copyPublicMap,
+  deleteMapForAccount,
+  listMapsForAccount,
+  listPublicMaps,
+  saveMapForAccount,
+  setMapPublished,
+} from "./maps.js";
 import {
   applyMatchRatings,
   getRatingForAnonId,
@@ -46,6 +53,7 @@ import {
   STARTING_RATING,
 } from "./rating.js";
 import { ensureBotPopulation, pickBotOpponents } from "./botAccounts.js";
+import { awardChest, listChests, openChest, startUnlock } from "./chests.js";
 import { DEFAULT_GAME_MODE, isGameMode, playerCountFor, type GameMode } from "./shared.js";
 import { BOT_LEVELS, DEFAULT_BOT_LEVEL, isBotLevel, type BotLevel } from "./bots.js";
 import { COUNTDOWN_MS, Matchmaker } from "./matchmaking.js";
@@ -205,6 +213,85 @@ const httpServer = createServer((req, res) => {
       }
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify(saved));
+    });
+    return;
+  }
+
+  // Coffres (voir chests.ts) : tout demande un compte.
+  if (req.url === "/me/chests" && req.method === "GET") {
+    withAccount(req, res, async (accountId) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ chests: await listChests(accountId) }));
+    });
+    return;
+  }
+
+  const chestAction = req.url?.match(/^\/me\/chests\/([0-9a-f-]{36})\/(unlock|open)$/);
+  if (chestAction && req.method === "POST") {
+    const [, chestId, action] = chestAction;
+    withAccount(req, res, async (accountId) => {
+      const result =
+        action === "unlock"
+          ? await startUnlock(accountId, chestId!)
+          : await openChest(accountId, chestId!);
+      if (!result.ok) {
+        // 404 : pas ce coffre ; 409 : une autre ouverture en cours, ou pas encore prêt.
+        res.writeHead(result.reason === "not-found" ? 404 : 409, {
+          "content-type": "application/json",
+        });
+        res.end(JSON.stringify({ reason: result.reason }));
+        return;
+      }
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify(result));
+    });
+    return;
+  }
+
+  // Galerie (#33) : la liste se lit sans compte ; publier ou copier en demande un.
+  if (req.url?.startsWith("/maps/public") && req.method === "GET") {
+    const query = new URL(req.url, "http://localhost").searchParams;
+    listPublicMaps(query.get("q") ?? "", Number(query.get("page")) || 0)
+      .then((result) => {
+        res.writeHead(200, { "content-type": "application/json" });
+        res.end(JSON.stringify(result));
+      })
+      .catch((error: unknown) => {
+        console.error("Galerie illisible :", error);
+        res.writeHead(500);
+        res.end();
+      });
+    return;
+  }
+
+  const publication = req.url?.match(/^\/me\/maps\/([0-9a-f-]{36})\/publication$/);
+  if (publication && req.method === "POST") {
+    withAccount(req, res, async (accountId) => {
+      const payload = (await readJsonBody(req).catch(() => null)) as { published?: unknown } | null;
+      if (typeof payload?.published !== "boolean") {
+        res.writeHead(400);
+        res.end();
+        return;
+      }
+      const result = await setMapPublished(accountId, publication[1]!, payload.published);
+      if (!result.ok && result.reason === "not-found") {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
+      // Refus d'équilibre : 422 avec la liste des raisons, à montrer au joueur.
+      res.writeHead(result.ok ? 200 : 422, { "content-type": "application/json" });
+      res.end(JSON.stringify(result.ok ? result.map : { problems: result.problems }));
+    });
+    return;
+  }
+
+  const copy = req.url?.match(/^\/me\/maps\/copies\/([0-9a-f-]{36})$/);
+  if (copy && req.method === "POST") {
+    withAccount(req, res, async (accountId) => {
+      const copied = await copyPublicMap(accountId, copy[1]!);
+      res.writeHead(copied ? 200 : 404, { "content-type": "application/json" });
+      res.end(copied ? JSON.stringify(copied) : undefined);
     });
     return;
   }
@@ -536,14 +623,15 @@ const WIN_SCORE = 15;
 // Best-effort et non bloquant : la partie a déjà été annoncée aux joueurs
 // (voir GameRoom#checkForWinner) quand ce callback se déclenche, une base
 // indisponible ne doit jamais faire planter le serveur de jeu.
-function recordMatchResult(result: MatchResult): void {
-  recordMatch(result).catch((error: unknown) => {
+function recordMatchResult(result: MatchResult): Promise<void> {
+  const recorded = recordMatch(result).catch((error: unknown) => {
     console.error("Échec de l'enregistrement de la partie :", error);
   });
   // Le classement suit la même règle : jamais bloquant, jamais fatal.
   applyMatchRatings(result).catch((error: unknown) => {
     console.error("Échec de la mise à jour du classement :", error);
   });
+  return recorded;
 }
 
 /**
@@ -619,11 +707,12 @@ function withAccount(
 async function resolvePlayer(
   guestAnonId: string,
   token?: string,
-): Promise<{ signedIn: boolean; anonId: string; outfit: string[] }> {
+): Promise<{ signedIn: boolean; anonId: string; outfit: string[]; accountId?: string }> {
   const accountId = token ? await getAccountIdForToken(token) : undefined;
   if (!accountId) return { signedIn: false, anonId: guestAnonId, outfit: [] };
   return {
     signedIn: true,
+    accountId,
     anonId: await anonIdForAccount(accountId),
     outfit: await getOutfit(accountId),
   };
@@ -725,7 +814,7 @@ wss.on("connection", (socket: WebSocket) => {
       // cliquent en même temps — avant, chaque JOIN créait sa propre salle
       // privée et tout le monde jouait seul contre des bots.
       resolvePlayer(message.anonId, message.token)
-        .then(async ({ signedIn, anonId, outfit }) => {
+        .then(async ({ signedIn, anonId, outfit, accountId }) => {
           const mode = isGameMode(message.mode) ? message.mode : DEFAULT_GAME_MODE;
           if (!isAllowed(mode, signedIn)) {
             const error: ServerMessage = { type: "ERROR", message: ACCOUNT_REQUIRED };
@@ -738,7 +827,7 @@ wss.on("connection", (socket: WebSocket) => {
             currentRoom = open;
             currentRoomId = open.id;
             currentMode = mode;
-            open.join(playerId, message.name, socket, anonId, outfit);
+            open.join(playerId, message.name, socket, anonId, outfit, accountId);
             socket.send(JSON.stringify({ ...open.getMapMessage(), you: playerId }));
             // Cette arrivée a peut-être complété la salle : elle part alors
             // sans attendre la fin du délai.
@@ -770,10 +859,24 @@ wss.on("connection", (socket: WebSocket) => {
 
           currentRoomId = `${mode}-${randomUUID()}`;
           currentMode = mode;
+          // La récompense attend que la partie soit enregistrée : elle compte dans les parties du jour.
+          let recorded: Promise<void> = Promise.resolve();
           const matchContext: MatchContext = {
             mapName: official.name,
             mode,
-            onEnd: recordMatchResult,
+            onEnd: (result) => {
+              recorded = recordMatchResult(result);
+            },
+            reward: async ({ accountId: winnerAccount, moves }) => {
+              await recorded;
+              const award = await awardChest(winnerAccount, moves);
+              if (award.outcome === "won") {
+                return { type: "CHEST", outcome: "won", rarity: award.chest.rarity };
+              }
+              return award.outcome === "none"
+                ? undefined
+                : { type: "CHEST", outcome: award.outcome };
+            },
           };
           const room = new GameRoom(
             currentRoomId,
@@ -792,7 +895,7 @@ wss.on("connection", (socket: WebSocket) => {
           // arrivant reçoit un WAITING sans échéance, puis plus rien jusqu'au
           // départ — un compte à rebours qui commence à un chiffre inconnu.
           matchmaker.hold(mode, room, () => fillWithBots(room, playerRating, botLevel));
-          room.join(playerId, message.name, socket, anonId, outfit);
+          room.join(playerId, message.name, socket, anonId, outfit, accountId);
           socket.send(JSON.stringify({ ...room.getMapMessage(), you: playerId }));
           // Un mode à une seule place partirait immédiatement : il n'y a
           // personne à attendre. Aucun mode n'est dans ce cas aujourd'hui

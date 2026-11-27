@@ -168,7 +168,7 @@ onMounted(() => {
   const loadId = route.query.load;
   if (typeof loadId === "string") {
     void loadMapById(loadId);
-    router.replace({ path: "/creatif" });
+    router.replace({ path: "/creatif/editeur" });
   }
 });
 </script>
@@ -180,7 +180,16 @@ onMounted(() => {
     class="flex h-full flex-col gap-2 overflow-y-auto px-3 py-3 short:grid short:grid-cols-[minmax(0,1fr)_18rem] short:grid-rows-[repeat(5,auto)_1fr] short:content-start short:gap-2 short:py-2"
   >
     <div class="flex items-center justify-between gap-2">
-      <h1 class="text-xl font-bold">Créatif</h1>
+      <div class="flex items-center gap-3">
+        <RouterLink
+          to="/creatif"
+          aria-label="Retour au menu Créatif"
+          class="flex h-9 w-9 items-center justify-center rounded-lg border border-ink/10 bg-surface/80"
+        >
+          <i class="ri-arrow-left-line" aria-hidden="true" />
+        </RouterLink>
+        <h1 class="text-xl font-bold">Éditeur</h1>
+      </div>
       <RouterLink
         to="/creatif/cartes"
         class="shrink-0 rounded-lg bg-ink/10 px-3 py-2 text-xs font-semibold text-ink/70"

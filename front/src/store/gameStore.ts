@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import type { BotLevel, GameMode, PlayerState } from "../types.js";
+import type { BotLevel, ChestMessage, GameMode, PlayerState } from "../types.js";
 
 export interface GameMapInfo {
   width: number;
@@ -16,6 +16,8 @@ export const useGameStore = defineStore("game", {
     // Défini quand le serveur envoie END (voir useGameSocket.ts) : la partie
     // est terminée, plus aucun coup n'est accepté côté serveur.
     winnerId: null as string | null,
+    /** Ce que la victoire a rapporté (coffre, places pleines...), si on a gagné avec un compte. */
+    chest: null as ChestMessage | null,
     // Fin du décompte de départ, sur l'horloge du navigateur. Nul tant que le
     // plateau n'est pas montré.
     playableAt: null as number | null,
@@ -49,6 +51,9 @@ export const useGameStore = defineStore("game", {
     setPlayableAt(playableAt: number | null) {
       this.playableAt = playableAt;
     },
+    setChest(chest: ChestMessage | null) {
+      this.chest = chest;
+    },
     setWinner(winnerId: string | null) {
       this.winnerId = winnerId;
     },
@@ -66,6 +71,7 @@ export const useGameStore = defineStore("game", {
       this.queue = null;
       this.map = null;
       this.winnerId = null;
+      this.chest = null;
       this.playerId = null;
       this.playableAt = null;
       this.error = null;

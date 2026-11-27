@@ -16,6 +16,8 @@ import type { BotLevel, GameMode } from "../types.js";
 const MODES: GameMode[] = ["duel", "ffa4"];
 const BOT_LEVELS: BotLevel[] = ["debutant", "intermediaire", "confirme", "expert", "impossible"];
 import AppButton from "../components/atoms/AppButton.vue";
+import ChestIcon from "../components/atoms/ChestIcon.vue";
+import { CHEST_LOOK } from "../lib/chests.js";
 import MiniMap from "../components/molecules/MiniMap.vue";
 import CountdownOverlay from "../components/molecules/CountdownOverlay.vue";
 import { useCountdown } from "../composables/useCountdown.js";
@@ -179,6 +181,29 @@ const rankedPlayers = computed(() =>
           <span class="text-lg font-bold">{{ player.score }}</span>
         </div>
       </div>
+
+      <!-- Ce que la victoire a rapporté : le coffre gagné, ou pourquoi il n'y en a pas. -->
+      <div
+        v-if="store.chest && store.chest.outcome === 'won'"
+        class="flex items-center gap-3 rounded-xl bg-ink/10 px-4 py-2"
+      >
+        <span class="h-10 w-12"><ChestIcon :rarity="store.chest.rarity" /></span>
+        <span class="text-left text-sm">
+          <span class="block font-bold"
+            >Coffre {{ CHEST_LOOK[store.chest.rarity].name }} gagné</span
+          >
+          <span class="block text-xs text-ink/60">À ouvrir depuis l'accueil</span>
+        </span>
+      </div>
+      <p v-else-if="store.chest" class="max-w-xs text-xs text-ink/60">
+        {{
+          store.chest.outcome === "full"
+            ? "Tes 4 places sont pleines : ouvre un coffre pour en gagner d'autres."
+            : store.chest.outcome === "complete"
+              ? "Pas de coffre : tu as déjà tous les accessoires."
+              : "Plus de coffre aujourd'hui : tu as joué tes 15 parties du jour."
+        }}
+      </p>
 
       <div class="flex w-full max-w-xs flex-col gap-2">
         <template v-if="lobbyPath">

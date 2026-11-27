@@ -19,6 +19,76 @@ export interface SavedMap {
   tiles: TileKind[][];
   spawnCount: number;
   updatedAt: string;
+  /** Dans la galerie publique. */
+  published?: boolean;
+}
+
+/** Une carte de la galerie publique, avec son auteur (voir back/src/maps.ts#listPublicMaps). */
+export interface PublicMap {
+  id: string;
+  name: string;
+  author: string;
+  width: number;
+  height: number;
+  tiles: TileKind[][];
+  spawnCount: number;
+  publishedAt: string;
+}
+
+export type PublishOutcome = { ok: true; map: SavedMap } | { ok: false; problems: string[] };
+
+/**
+ * Publie une carte dans la galerie, ou l'en retire. Refusée si elle n'est pas équilibrée : le
+ * serveur dit pourquoi, et on le montre tel quel.
+ */
+export async function publishMyMap(
+  token: string,
+  id: string,
+  published: boolean,
+): Promise<PublishOutcome> {
+  try {
+    const response = await fetch(`${HTTP_URL}/me/maps/${id}/publication`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ published }),
+    });
+    if (response.ok) return { ok: true, map: (await response.json()) as SavedMap };
+    if (response.status === 422) {
+      const body = (await response.json()) as { problems?: string[] };
+      return { ok: false, problems: body.problems ?? [] };
+    }
+    return { ok: false, problems: ["le serveur a refusé, réessaie"] };
+  } catch {
+    return { ok: false, problems: ["serveur injoignable, réessaie"] };
+  }
+}
+
+/** Une page de la galerie. `undefined` si le serveur ne répond pas : à dire, pas à taire. */
+export async function fetchPublicMaps(
+  search: string,
+  page: number,
+): Promise<{ maps: PublicMap[]; hasMore: boolean } | undefined> {
+  try {
+    const query = new URLSearchParams({ q: search, page: String(page) });
+    const response = await fetch(`${HTTP_URL}/maps/public?${query}`);
+    if (!response.ok) return undefined;
+    return (await response.json()) as { maps: PublicMap[]; hasMore: boolean };
+  } catch {
+    return undefined;
+  }
+}
+
+/** Copie une carte de la galerie dans « Mes cartes ». */
+export async function copyPublicMap(token: string, id: string): Promise<SavedMap | undefined> {
+  try {
+    const response = await fetch(`${HTTP_URL}/me/maps/copies/${id}`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    return response.ok ? ((await response.json()) as SavedMap) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Frontière d'E/S (réseau) — volontairement non testée unitairement. */

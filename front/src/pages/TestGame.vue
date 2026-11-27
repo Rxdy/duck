@@ -21,10 +21,10 @@ const testSession = useTestSessionStore();
 const store = useGameStore();
 const settings = useSettingsStore();
 
-// Arrivée directe sans être passé par le bouton "Tester" de /creatif : rien à
+// Arrivée directe sans être passé par le bouton "Tester" de l'éditeur : rien à
 // tester, on renvoie vers l'éditeur plutôt que d'afficher un écran cassé.
 if (!testSession.map) {
-  router.replace("/creatif");
+  router.replace(testSession.returnTo);
 }
 
 // Fallback inerte le temps que la redirection ci-dessus prenne effet.
@@ -55,7 +55,10 @@ const displayPlayers = computed(() =>
       <span class="rounded-full bg-surface/80 px-4 py-1 text-xs text-ink/70">
         Mode entraînement — carte test
       </span>
-      <RouterLink to="/creatif" class="rounded-full bg-surface/80 px-3 py-1 text-xs text-ink/70">
+      <RouterLink
+        to="/creatif/editeur"
+        class="rounded-full bg-surface/80 px-3 py-1 text-xs text-ink/70"
+      >
         Quitter
       </RouterLink>
     </div>
