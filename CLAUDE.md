@@ -6,7 +6,7 @@
 ## Poste
 
 - Nouveau poste : `make poste` (une seule fois), puis `make dev` ; le jeu est sur http://localhost:5173.
-- Branche de travail : `fix/responsive`. Avant de pousser : `make check`.
+- Branche de travail : `fix/glissade`. Avant de pousser : `make check`.
 - Le dépôt est **public** : aucun secret, mot de passe de test ni donnée personnelle dans un fichier.
 
 ## Façon de travailler attendue
