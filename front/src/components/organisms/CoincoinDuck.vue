@@ -45,7 +45,6 @@ let frame: number | undefined;
 function build(): { coincoin: Coincoin; dressing: Dressing } {
   const coincoin = createCoincoin(props.color);
   const dressing = dress(coincoin, props.outfit);
-  coincoin.group.scale.setScalar(SCALE);
   place(coincoin, performance.now());
   return { coincoin, dressing };
 }
@@ -59,6 +58,7 @@ function place(target: Coincoin, now: number) {
   const pose = motion.poseAt(now);
   target.group.position.set(pose.x + 0.5, 0, pose.y + 0.5);
   target.group.rotation.y = pose.heading;
+  target.group.scale.setScalar(SCALE * Math.max(pose.appear, 0.001));
 }
 
 watch(

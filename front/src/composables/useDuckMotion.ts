@@ -13,10 +13,23 @@ const CHAIN_MS = 45;
 /** Au départ le bec est tourné vers +x, visible de face par la caméra isométrique. */
 const INITIAL_HEADING = Math.PI / 2;
 
+/** Durée de l'apparition du canard replacé à sa base (point marqué, joueur touché). */
+export const WARP_MS = 280;
+
 export interface Pose {
   x: number;
   y: number;
   heading: number;
+  /** Échelle d'apparition, de 0 à 1 : 1 sauf juste après un retour à la base. */
+  appear: number;
+}
+
+/** Sortie rapide, léger dépassement : le canard « pop » plutôt qu'il ne grossit mollement. */
+export function popIn(t: number): number {
+  const x = Math.min(1, Math.max(0, t));
+  const c1 = 1.4;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
 }
 
 /**
@@ -26,7 +39,8 @@ export interface Pose {
  */
 export function createDuckMotion(x: number, y: number) {
   let target = { x, y };
-  let from: Pose = { x, y, heading: INITIAL_HEADING };
+  let from: Pose = { x, y, heading: INITIAL_HEADING, appear: 1 };
+  let warpedAt = -Infinity;
   let heading = INITIAL_HEADING;
   let start = -Infinity;
   let duration = GLIDE_MS;
@@ -45,6 +59,7 @@ export function createDuckMotion(x: number, y: number) {
       x: from.x + (target.x - from.x) * eased,
       y: from.y + (target.y - from.y) * eased,
       heading: turnTowards(from.heading, heading, eased),
+      appear: popIn((now - warpedAt) / WARP_MS),
     };
   }
 
@@ -69,7 +84,9 @@ export function createDuckMotion(x: number, y: number) {
       const glide = !reducedMotion && shouldGlide(dx, dy);
       target = { x: nextX, y: nextY };
       if (shouldGlide(dx, dy)) heading = headingFor(dx, dy)!;
-      from = glide ? current : { x: nextX, y: nextY, heading };
+      from = glide ? current : { x: nextX, y: nextY, heading, appear: 1 };
+      // Un saut qui n'est ni un pas ni un mouvement réduit : le canard réapparaît en « pop ».
+      if (!glide && !reducedMotion) warpedAt = now;
       curve = curveFor(now - (start + duration));
       start = now;
       duration = glide ? GLIDE_MS : 0;

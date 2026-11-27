@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { GLIDE_MS } from "../lib/coincoin.js";
-import { createDuckMotion } from "./useDuckMotion.js";
+import { createDuckMotion, WARP_MS } from "./useDuckMotion.js";
 
 describe("createDuckMotion", () => {
   it("glisse d'une case à la voisine", () => {
@@ -25,6 +25,23 @@ describe("createDuckMotion", () => {
     const motion = createDuckMotion(9, 4);
     motion.moveTo(1, 1, 0);
     expect(motion.poseAt(0)).toMatchObject({ x: 1, y: 1 });
+  });
+
+  it("fait réapparaître en « pop » un canard renvoyé à sa base", () => {
+    const motion = createDuckMotion(9, 4);
+    motion.moveTo(1, 1, 0);
+    expect(motion.poseAt(0).appear).toBe(0);
+    expect(motion.poseAt(WARP_MS / 2).appear).toBeGreaterThan(0.5);
+    expect(motion.poseAt(WARP_MS).appear).toBe(1);
+  });
+
+  it("n'applique aucun effet à un pas ni aux animations réduites", () => {
+    const step = createDuckMotion(1, 1);
+    step.moveTo(2, 1, 0);
+    expect(step.poseAt(10).appear).toBe(1);
+    const reduced = createDuckMotion(9, 4);
+    reduced.moveTo(1, 1, 0, true);
+    expect(reduced.poseAt(0).appear).toBe(1);
   });
 
   it("ne glisse pas quand les animations sont réduites", () => {
