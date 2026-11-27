@@ -5,12 +5,10 @@ import { NOEL, SCENES, sceneFor } from "./noel.js";
 describe("scènes de saison", () => {
   it("n'habille les canards qu'avec des accessoires du catalogue, une pièce par emplacement", () => {
     const slots = new Map(ACCESSOIRES.map((a) => [a.id, a.emplacement]));
-    for (const diorama of NOEL.dioramas) {
-      for (const actor of diorama.actors) {
-        const worn = actor.outfit.map((id) => slots.get(id));
-        expect(worn, actor.outfit.join(",")).not.toContain(undefined);
-        expect(new Set(worn).size, actor.outfit.join(",")).toBe(worn.length);
-      }
+    for (const actor of NOEL.actors) {
+      const worn = actor.outfit.map((id) => slots.get(id));
+      expect(worn, actor.outfit.join(",")).not.toContain(undefined);
+      expect(new Set(worn).size, actor.outfit.join(",")).toBe(worn.length);
     }
   });
 

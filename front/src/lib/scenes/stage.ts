@@ -1,6 +1,7 @@
 /**
- * La scène vivante du fond : un seul canvas transparent, la caméra du jeu (isométrique), et des
- * dioramas posés de part et d'autre de la page. Les canards bougent selon motion.ts.
+ * Rend une scène pleine page : le sol, les décors et les canards, vus par la caméra isométrique du
+ * jeu. Sert à fabriquer l'image de fond de chaque saison (scripts/render-scenes.mjs) ; le site, lui,
+ * n'affiche que cette image.
  */
 import {
   DirectionalLight,
@@ -8,20 +9,33 @@ import {
   HemisphereLight,
   OrthographicCamera,
   Scene,
-  Vector3,
   WebGLRenderer,
 } from "three";
 import { createCoincoin, type Coincoin } from "../coincoin.js";
 import { dress, type Dressing } from "../outfit.js";
 import { poseAt, type Placement } from "./motion.js";
 import type { SceneDefinition, SceneProp } from "./noel.js";
-import { cane, gift, sack, slab, snowfall, snowman, tree, type Prop } from "./props.js";
+import {
+  cane,
+  drift,
+  floor,
+  gift,
+  lamppost,
+  sack,
+  sleigh,
+  snowfall,
+  snowman,
+  tree,
+  type Prop,
+} from "./props.js";
 
 const AZIMUTH = (40 * Math.PI) / 180;
 const ELEVATION = (30 * Math.PI) / 180;
-const DISTANCE = 30;
+const DISTANCE = 60;
 /** Les canards sont un peu agrandis : ils sont l'attraction, plus que le décor. */
-const DUCK_SCALE = 1.5;
+const DUCK_SCALE = 2;
+/** Largeur de l'image, en cases du monde : toute la scène tient dans ce cadre. */
+const VIEW_UNITS = 29;
 
 interface Actor {
   placement: Placement;
@@ -42,48 +56,34 @@ function buildProp(prop: SceneProp): Prop {
       return sack();
     case "cane":
       return cane();
+    case "lamppost":
+      return lamppost();
+    case "sleigh":
+      return sleigh();
+    case "drift":
+      return drift(prop.radius);
   }
 }
 
 export interface Stage {
-  /** Redessine à l'instant donné (en secondes). */
+  /** Dessine la scène à l'instant donné (en secondes) : les canards y prennent la pose du moment. */
   render(time: number): void;
   resize(width: number, height: number): void;
   dispose(): void;
 }
 
-export interface StageOptions {
-  /**
-   * Ne montre que ce diorama, centré dans l'image : c'est ainsi qu'on fabrique les images fixes des
-   * pages (scripts/render-scenes.mjs). Sans cela, tous sont posés de part et d'autre de la fenêtre.
-   */
-  only?: number;
-  /** Garde l'image dessinée, pour pouvoir la lire (capture, export). */
-  preserve?: boolean;
-  pixelRatio?: number;
-}
-
-export function createStage(
-  canvas: HTMLCanvasElement,
-  definition: SceneDefinition,
-  options: StageOptions = {},
-): Stage {
-  const renderer = new WebGLRenderer({
-    canvas,
-    antialias: true,
-    alpha: true,
-    preserveDrawingBuffer: options.preserve ?? false,
-  });
-  renderer.setPixelRatio(options.pixelRatio ?? Math.min(window.devicePixelRatio || 1, 2));
-  renderer.setClearColor(0x000000, 0);
+export function createStage(canvas: HTMLCanvasElement, definition: SceneDefinition): Stage {
+  const renderer = new WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(1);
+  renderer.setClearColor(0x0f1218, 1);
 
   const scene = new Scene();
-  scene.add(new HemisphereLight(0xffffff, 0x9a9690, 2.0));
-  const sun = new DirectionalLight(0xffffff, 1.6);
-  sun.position.set(-4, 10, 6);
+  scene.add(new HemisphereLight(0xd8e4ff, 0x6b7a99, 1.9));
+  const sun = new DirectionalLight(0xfff1dc, 1.7);
+  sun.position.set(-8, 14, 9);
   scene.add(sun);
 
-  const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 200);
+  const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 400);
   camera.position.set(
     DISTANCE * Math.cos(ELEVATION) * Math.sin(AZIMUTH),
     DISTANCE * Math.sin(ELEVATION),
@@ -93,72 +93,31 @@ export function createStage(
   camera.updateMatrixWorld();
 
   const props: Prop[] = [];
+  const ground = floor(definition.size);
+  props.push(ground);
+  scene.add(ground.object);
+  for (const description of definition.props) {
+    const prop = buildProp(description);
+    prop.object.position.set(description.x, 0, description.z);
+    if ("turn" in description) prop.object.rotation.y = description.turn ?? 0;
+    props.push(prop);
+    scene.add(prop.object);
+  }
+
   const actors: Actor[] = [];
-  const shown = definition.dioramas.filter(
-    (_, i) => options.only === undefined || i === options.only,
-  );
-  const roots = shown.map((diorama) => {
-    const root = new Group();
-    const floor = slab(diorama.size);
-    props.push(floor);
-    root.add(floor.object);
-    for (const description of diorama.props) {
-      const prop = buildProp(description);
-      prop.object.position.set(description.x, 0, description.z);
-      if (description.kind === "gift" || description.kind === "cane")
-        prop.object.rotation.y = description.turn ?? 0;
-      props.push(prop);
-      root.add(prop.object);
-    }
-    for (const description of diorama.actors) {
-      const duck = createCoincoin(description.color);
-      const dressing = dress(duck, description.outfit);
-      const group = duck.group;
-      group.scale.setScalar(DUCK_SCALE);
-      root.add(group);
-      actors.push({ placement: description, duck, dressing, group });
-    }
-    scene.add(root);
-    return root;
-  });
+  for (const description of definition.actors) {
+    const duck = createCoincoin(description.color);
+    const dressing = dress(duck, description.outfit);
+    duck.group.scale.setScalar(DUCK_SCALE);
+    scene.add(duck.group);
+    actors.push({ placement: description, duck, dressing, group: duck.group });
+  }
 
   let snow: Prop | undefined;
   if (definition.snow) {
-    snow = snowfall(260, { x: 30, z: 30, height: 14 });
-    snow.object.position.set(-15, 0, -15);
+    snow = snowfall(900, { x: 60, z: 60, height: 18 });
+    snow.object.position.set(-30, 0, -30);
     scene.add(snow.object);
-  }
-
-  /** Le point du sol qui s'affiche en (ndcX, ndcY) : où poser le centre d'une dalle. */
-  function ground(ndcX: number, ndcY: number): Vector3 {
-    const origin = new Vector3(ndcX, ndcY, -1).unproject(camera);
-    const direction = new Vector3();
-    camera.getWorldDirection(direction);
-    return origin.addScaledVector(direction, -origin.y / direction.y);
-  }
-
-  let width = 1;
-  let height = 1;
-  function resize(w: number, h: number) {
-    width = Math.max(1, w);
-    height = Math.max(1, h);
-    renderer.setSize(width, height, false);
-    // Une unité du monde = une part fixe de la largeur : la scène suit la taille de la fenêtre.
-    const single = options.only !== undefined;
-    const pixelsPerUnit = single
-      ? width / ((shown[0]?.size ?? 5) * 1.55)
-      : Math.min(width * 0.032, height * 0.1);
-    camera.left = -width / 2 / pixelsPerUnit;
-    camera.right = width / 2 / pixelsPerUnit;
-    camera.top = height / 2 / pixelsPerUnit;
-    camera.bottom = -height / 2 / pixelsPerUnit;
-    camera.updateProjectionMatrix();
-    camera.updateMatrixWorld();
-    shown.forEach((diorama, i) => {
-      // Seul : la dalle un peu sous le milieu de l'image, pour laisser de la place au sapin.
-      const target = single ? { x: 0.5, y: 0.66 } : diorama.at;
-      roots[i]!.position.copy(ground(target.x * 2 - 1, 1 - target.y * 2));
-    });
   }
 
   return {
@@ -172,7 +131,15 @@ export function createStage(
       }
       renderer.render(scene, camera);
     },
-    resize,
+    resize(width, height) {
+      renderer.setSize(width, height, false);
+      const unit = width / VIEW_UNITS;
+      camera.left = -width / 2 / unit;
+      camera.right = width / 2 / unit;
+      camera.top = height / 2 / unit;
+      camera.bottom = -height / 2 / unit;
+      camera.updateProjectionMatrix();
+    },
     dispose() {
       for (const prop of props) prop.dispose();
       snow?.dispose();

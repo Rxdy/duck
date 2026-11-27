@@ -6,9 +6,12 @@ import {
   BoxGeometry,
   BufferAttribute,
   BufferGeometry,
+  Color,
   ConeGeometry,
   CylinderGeometry,
   Group,
+  InstancedMesh,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
@@ -242,5 +245,105 @@ export function cane(height = 0.8): Prop {
   );
   hook.rotation.z = Math.PI / 2;
   add(object, new SphereGeometry(0.045, 8, 6), white, 0.2, height - 0.04, 0);
+  return { object, dispose: disposer(object) };
+}
+
+/**
+ * Le sol d'une scène pleine page : un damier comme le plateau du jeu, sali de plaques de neige. Une
+ * seule instance par case, de quoi couvrir tout l'écran sans alourdir.
+ */
+export function floor(size: number): Prop {
+  const half = Math.floor(size / 2);
+  const cells = (half * 2) ** 2;
+  const mesh = new InstancedMesh(
+    new BoxGeometry(0.96, 0.3, 0.96),
+    new MeshLambertMaterial(),
+    cells,
+  );
+  const matrix = new Matrix4();
+  const color = new Color();
+  const tones = ["#202833", "#1b222c", "#232b37"];
+  let i = 0;
+  for (let x = -half; x < half; x++) {
+    for (let z = -half; z < half; z++) {
+      matrix.setPosition(x + 0.5, -0.15, z + 0.5);
+      mesh.setMatrixAt(i, matrix);
+      // Du pseudo-aléatoire stable : la même scène à chaque fabrication.
+      const noise = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
+      color.set(
+        noise > 0.8
+          ? "#5f6f86"
+          : noise > 0.72
+            ? "#3b475a"
+            : tones[(x + z) & 1 ? 0 : noise > 0.4 ? 1 : 2]!,
+      );
+      mesh.setColorAt(i, color);
+      i++;
+    }
+  }
+  const object = new Group();
+  object.add(mesh);
+  return {
+    object,
+    dispose() {
+      mesh.geometry.dispose();
+      (mesh.material as Material).dispose();
+      mesh.dispose();
+    },
+  };
+}
+
+/** Un lampadaire à guirlande, dont l'ampoule éclaire la scène. */
+export function lamppost(height = 3): Prop {
+  const object = new Group();
+  const iron = lambert("#2b3340");
+  add(object, new CylinderGeometry(0.1, 0.14, height, 8), iron, 0, height / 2, 0);
+  add(object, new CylinderGeometry(0.24, 0.3, 0.14, 8), iron, 0, 0.07, 0);
+  add(object, new BoxGeometry(0.46, 0.08, 0.46), iron, 0, height + 0.02, 0);
+  add(object, new SphereGeometry(0.2, 12, 10), lambert("#fde68a", "#f5b942"), 0, height + 0.24, 0);
+  // Un nœud rouge, pour la fête.
+  add(object, new BoxGeometry(0.34, 0.16, 0.08), lambert("#dc2626"), 0, height * 0.55, 0.12);
+  return { object, dispose: disposer(object) };
+}
+
+/** Le traîneau du Père Noël, chargé de cadeaux. */
+export function sleigh(): Prop {
+  const object = new Group();
+  const red = lambert("#b91c1c");
+  const gold = lambert("#f5b942");
+  add(object, new BoxGeometry(2.0, 0.34, 0.95), red, 0, 0.5, 0);
+  add(object, new BoxGeometry(2.0, 0.5, 0.12), red, 0, 0.84, -0.42);
+  add(object, new BoxGeometry(0.14, 0.9, 0.95), red, -1.0, 0.8, 0);
+  add(object, new BoxGeometry(2.2, 0.08, 0.1), gold, 0, 0.12, 0.38);
+  add(object, new BoxGeometry(2.2, 0.08, 0.1), gold, 0, 0.12, -0.38);
+  for (const x of [-0.6, 0.6]) add(object, new BoxGeometry(0.08, 0.3, 0.7), gold, x, 0.3, 0);
+  // Les cadeaux dans le traîneau.
+  const load: [string, string, number, number, number][] = [
+    ["#2563eb", "#f8fafc", -0.5, 0.35, 0.5],
+    ["#16a34a", "#fde047", 0.2, 0.3, 0.45],
+    ["#9333ea", "#fca5a5", 0.7, 0.28, 0.4],
+  ];
+  for (const [box, ribbon, x, size, lift] of load) {
+    const g = gift(box, ribbon, size);
+    g.object.position.set(x, lift + 0.2, 0);
+    object.add(g.object);
+  }
+  return { object, dispose: disposer(object) };
+}
+
+/** Un tas de neige, pour casser les angles. */
+export function drift(radius = 0.8): Prop {
+  const object = new Group();
+  const snow = lambert("#dbe4ef");
+  const body = add(object, new SphereGeometry(radius, 14, 10), snow, 0, 0, 0);
+  body.scale.set(1, 0.38, 0.8);
+  add(
+    object,
+    new SphereGeometry(radius * 0.6, 12, 8),
+    snow,
+    radius * 0.7,
+    0,
+    radius * 0.2,
+  ).scale.set(1, 0.4, 0.8);
   return { object, dispose: disposer(object) };
 }

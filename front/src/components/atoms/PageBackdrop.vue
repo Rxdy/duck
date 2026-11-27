@@ -39,20 +39,19 @@ onMounted(async () => {
 
 <template>
   <div aria-hidden="true" class="pointer-events-none absolute inset-0 overflow-hidden">
-    <!-- La scène de saison : une image fixe de chaque côté (fabriquée par scripts/render-scenes.mjs). -->
-    <div v-if="scene" class="hidden 2xl:block">
+    <!-- La scène de saison, sur tout le fond (fabriquée par scripts/render-scenes.mjs). Un voile assombrit le milieu,
+         là où se pose le contenu, pour qu'il reste lisible : les décors restent bien visibles sur les côtés. -->
+    <template v-if="scene">
       <img
-        :src="`/scenes/${scene.id}-gauche.png`"
+        :src="`/scenes/${scene.id}.jpg`"
         alt=""
-        class="absolute left-[-2%] top-1/2 w-[30vw] max-w-[560px] -translate-y-[44%] select-none"
+        class="absolute inset-0 h-full w-full select-none object-cover"
       />
-      <img
-        :src="`/scenes/${scene.id}-droite.png`"
-        alt=""
-        class="absolute right-[-2%] top-1/2 w-[30vw] max-w-[560px] -translate-y-[44%] select-none"
+      <div
+        class="absolute inset-0 bg-surface-deep/60 [background-image:linear-gradient(90deg,transparent_0%,rgb(var(--surface-deep)/0.55)_26%,rgb(var(--surface-deep)/0.55)_74%,transparent_100%)] md:bg-surface-deep/0"
       />
-    </div>
-    <div class="hidden xl:block" :class="{ '2xl:hidden': scene }">
+    </template>
+    <div v-else class="hidden xl:block">
       <div
         v-for="(side, index) in SIDES"
         :key="side.color"
