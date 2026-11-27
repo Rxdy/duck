@@ -1,3 +1,9 @@
+<script lang="ts">
+// Tirés une fois par visite, pour tout le module : revenir d'une partie (le fond est alors démonté)
+// ne rhabille pas les canards du fond.
+let drawnThemes: string[][] | undefined;
+</script>
+
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { DUCK_GLOW, DUCK_IMAGES } from "../../lib/ducks.js";
@@ -45,13 +51,14 @@ const image = computed(() => {
   return layout ? imagePath(edition, layout) : undefined;
 });
 
-const outfits = ref<string[][]>(SIDES.map(() => []));
+const outfits = ref<string[][]>(drawnThemes ?? SIDES.map(() => []));
 
 onMounted(async () => {
   // Les portraits n'existent qu'à partir de xl : pas de 3D, ni de catalogue chargé, sur un téléphone.
-  if (image.value || !window.matchMedia("(min-width: 1280px)").matches) return;
+  if (drawnThemes || image.value || !window.matchMedia("(min-width: 1280px)").matches) return;
   const { randomThemes } = await import("../../lib/backdropOutfits.js");
-  outfits.value = randomThemes(SIDES.length);
+  drawnThemes = randomThemes(SIDES.length);
+  outfits.value = drawnThemes;
 });
 </script>
 
