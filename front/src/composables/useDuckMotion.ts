@@ -16,6 +16,15 @@ const INITIAL_HEADING = Math.PI / 2;
 /** Durée de l'apparition du canard replacé à sa base (point marqué, joueur touché). */
 export const WARP_MS = 280;
 
+/**
+ * Toucher : la victime reste à sa case jusqu'à ce que l'attaquant arrive dessus (à mi-glissade, les
+ * deux canards se touchent), puis elle est éjectée sur KNOCK_MS avant de réapparaître chez elle. Le
+ * serveur, lui, l'a renvoyée d'un coup : sans ce délai, on la voyait disparaître alors que
+ * l'attaquant était encore à une case, comme mangée à distance.
+ */
+export const IMPACT_MS = Math.round(GLIDE_MS * 0.55);
+export const KNOCK_MS = 120;
+
 export interface Pose {
   x: number;
   y: number;
@@ -45,6 +54,20 @@ export function createDuckMotion(x: number, y: number) {
   let start = -Infinity;
   let duration = GLIDE_MS;
   let curve = easeInOut;
+  /** Éjection en cours (toucher) : instant de l'impact et case de retour. */
+  let knock: { at: number; homeX: number; homeY: number } | undefined;
+
+  /** Fin de l'éjection : la victime est chez elle et y réapparaît en « pop ». */
+  function settleKnock(now: number) {
+    if (!knock || now < knock.at + KNOCK_MS) return;
+    const end = knock.at + KNOCK_MS;
+    target = { x: knock.homeX, y: knock.homeY };
+    from = { x: knock.homeX, y: knock.homeY, heading, appear: 1 };
+    warpedAt = end;
+    start = end;
+    duration = 0;
+    knock = undefined;
+  }
 
   /** `since` : temps écoulé depuis la fin du pas précédent, négatif s'il n'est pas fini. */
   function curveFor(since: number) {
@@ -53,6 +76,25 @@ export function createDuckMotion(x: number, y: number) {
   }
 
   function poseAt(now: number): Pose {
+    if (knock && now >= knock.at + KNOCK_MS) {
+      const end = knock.at + KNOCK_MS;
+      return {
+        x: knock.homeX,
+        y: knock.homeY,
+        heading,
+        appear: popIn((now - end) / WARP_MS),
+      };
+    }
+    const pose = glidePose(now);
+    if (knock && now >= knock.at) {
+      // Éjecté : il rétrécit en tournant sur lui-même.
+      const k = (now - knock.at) / KNOCK_MS;
+      return { ...pose, appear: pose.appear * (1 - k), heading: pose.heading + k * Math.PI * 1.5 };
+    }
+    return pose;
+  }
+
+  function glidePose(now: number): Pose {
     const t = duration > 0 ? Math.min(1, Math.max(0, (now - start) / duration)) : 1;
     const eased = curve(t);
     return {
@@ -76,7 +118,30 @@ export function createDuckMotion(x: number, y: number) {
       start = now;
       duration = reducedMotion ? 0 : GLIDE_MS;
     },
+    /**
+     * Touché : renvoyé à (homeX, homeY), mais seulement une fois l'attaquant arrivé, dans `impactIn` ms.
+     * La glissade en cours (face à face) se poursuit jusque-là.
+     */
+    knockOut(
+      homeX: number,
+      homeY: number,
+      now: number,
+      impactIn = IMPACT_MS,
+      reducedMotion = false,
+    ) {
+      if (reducedMotion) {
+        this.moveTo(homeX, homeY, now, true);
+        return;
+      }
+      settleKnock(now);
+      knock = { at: now + Math.max(0, impactIn), homeX, homeY };
+    },
     moveTo(nextX: number, nextY: number, now: number, reducedMotion = false) {
+      // Un ordre arrivé pendant l'éjection : elle s'achève d'abord, le canard repart de chez lui.
+      if (knock) {
+        knock = { ...knock, at: Math.min(knock.at, now - KNOCK_MS) };
+        settleKnock(now);
+      }
       const dx = nextX - target.x;
       const dy = nextY - target.y;
       if (dx === 0 && dy === 0) return;

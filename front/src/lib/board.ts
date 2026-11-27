@@ -1,6 +1,7 @@
 import { Vector3, type OrthographicCamera } from "three";
 import { isSpawnKind, spawnColor } from "./mapEditor.js";
 import type { TileKind } from "./mapEditor.js";
+import type { Scenery } from "./scenery.js";
 
 export interface BoardTile {
   x: number;
@@ -30,6 +31,9 @@ const BOARD_PALETTE = {
   background: "#0f1218",
 } as const;
 
+/** Sol en paysage : un vert sourd, pour que les canards restent ce qui brille. */
+const GRASS_PALETTE = { light: "#3c6a3a", dark: "#355f34" } as const;
+
 /** Couleur de fond du canvas, derrière le plateau. */
 export function boardBackground(): string {
   return BOARD_PALETTE.background;
@@ -43,10 +47,15 @@ export function boardBackground(): string {
  * Les couleurs de spawn sont celles des JOUEURS : elles restent reconnaissables
  * partout.
  */
-export function tileColor(kind: TileKind | undefined, shade: "light" | "dark"): string {
+export function tileColor(
+  kind: TileKind | undefined,
+  shade: "light" | "dark",
+  scenery: Scenery = "tactique",
+): string {
   const palette = BOARD_PALETTE;
   if (kind === "wall") return palette.wall;
   if (kind && isSpawnKind(kind)) return spawnColor(kind);
+  if (scenery === "paysage") return shade === "light" ? GRASS_PALETTE.light : GRASS_PALETTE.dark;
   return shade === "light" ? palette.floorLight : palette.floorDark;
 }
 
@@ -76,6 +85,8 @@ export interface BoardMesh {
   /** Centre vertical du bloc. Toutes les cases partagent la même base, donc un
    *  mur pousse vers le haut depuis le sol au lieu de flotter ou d'être enterré. */
   centerY: number;
+  /** Case de sol libre (ni mur ni base) : la seule où le paysage pose de l'herbe. */
+  plain: boolean;
 }
 
 /**
@@ -92,15 +103,16 @@ export function buildBoardMeshes(options: {
   tiles?: { x: number; y: number; kind: TileKind }[];
   /** Bases des joueurs : teintent le sol alentour. Vide -> aucun territoire. */
   bases?: TerritoryBase[];
+  scenery?: Scenery;
 }): BoardMesh[] {
-  const { width, height, tiles, bases = [] } = options;
+  const { width, height, tiles, bases = [], scenery = "tactique" } = options;
   const overrides = new Map(tiles?.map((t) => [`${t.x},${t.y}`, t.kind]));
   const isWallAt = (x: number, y: number) => overrides.get(`${x},${y}`) === "wall";
 
   return buildBoardTiles(width, height).map((tile) => {
     const kind = overrides.get(`${tile.x},${tile.y}`);
     const blockHeight = kind === "wall" ? WALL_HEIGHT : FLOOR_HEIGHT;
-    const baseColor = tileColor(kind, tile.shade);
+    const baseColor = tileColor(kind, tile.shade, scenery);
     // Le territoire ne recolore ni un mur ni une base : seules les cases
     // neutres en reçoivent la teinte.
     const isNeutralFloor = kind === undefined || kind === "empty";
@@ -125,6 +137,7 @@ export function buildBoardMeshes(options: {
       color,
       height: blockHeight,
       centerY: -FLOOR_HEIGHT + blockHeight / 2,
+      plain: isNeutralFloor && !exactBase,
     };
   });
 }

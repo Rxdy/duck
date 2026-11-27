@@ -17,6 +17,12 @@ const TOUCH_CONTROLS = [
   { value: "zones", label: "Zones" },
 ] as const;
 
+const SCENERY = [
+  { value: "auto", label: "Auto" },
+  { value: "tactique", label: "Tactique" },
+  { value: "paysage", label: "Paysage" },
+] as const;
+
 const DIRECTION_LABELS: { direction: Direction; label: string }[] = [
   { direction: "UP", label: "Haut" },
   { direction: "DOWN", label: "Bas" },
@@ -67,6 +73,12 @@ const sections = computed(() => [
           hapticsSupported ? ` · Vibration ${onOff(settings.hapticsEnabled)}` : ""
         }`
       : DIRECTION_LABELS.map((d) => labelForKeyCode(settings.keyBindings[d.direction])).join(" "),
+  },
+  {
+    key: "affichage",
+    title: "Affichage",
+    icon: "ri-landscape-fill",
+    summary: `Décor de la carte : ${labelOf(SCENERY, settings.scenery).toLowerCase()}`,
   },
   {
     key: "accessibilite",
@@ -206,6 +218,24 @@ const current = computed(() => sections.value.find((s) => s.key === route.params
               Réinitialiser
             </button>
           </template>
+        </template>
+
+        <template v-else-if="current.key === 'affichage'">
+          <SegmentedChoice
+            label="Décor de la carte"
+            :options="SCENERY"
+            :model-value="settings.scenery"
+            @update:model-value="settings.setScenery($event)"
+          />
+          <p class="text-xs text-ink/50">
+            {{
+              settings.scenery === "tactique"
+                ? "Cases sobres, sans décor : le plus léger et le plus lisible."
+                : settings.scenery === "paysage"
+                  ? "Herbe qui ondule sur le sol. Plus joli, un peu plus gourmand."
+                  : "Paysage sur ordinateur, tactique sur téléphone. Si l'appareil peine, la carte repasse en tactique."
+            }}
+          </p>
         </template>
 
         <template v-else>

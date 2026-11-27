@@ -3,7 +3,7 @@ import type { WebSocket } from "ws";
 import { Tile, type GameMap } from "./game-engine/index.js";
 import { generateMap } from "./map-generator/index.js";
 import { STEP_MS } from "./shared.js";
-import { GameRoom } from "./room.js";
+import { FLEE_MS, GameRoom } from "./room.js";
 import { PLAYER_COLORS } from "./shared.js";
 import { POINTS_PER_BASE } from "./game-engine/index.js";
 
@@ -141,6 +141,109 @@ describe("GameRoom", () => {
       room.leave("p1");
 
       expect(vi.getTimerCount()).toBe(0);
+    });
+  });
+
+  describe("chance de fuir", () => {
+    afterEach(() => vi.useRealTimers());
+
+    type Seen = { id: string; x: number; y: number; score: number };
+    const seen = (socket: WebSocket, id: string) =>
+      (lastState(socket) as unknown as { players: Seen[] }).players.find((p) => p.id === id)!;
+
+    /** Couloir : A part de x=1, B de x=7 ; ils se retrouvent face à face en x=4 et x=5. */
+    function faceToFace() {
+      vi.useFakeTimers();
+      const row = Array(9).fill(Tile.Empty);
+      row[0] = Tile.Wall;
+      row[8] = Tile.Wall;
+      row[1] = Tile.Spawn;
+      row[7] = Tile.Spawn;
+      const tiles = [Array(9).fill(Tile.Wall), row, Array(9).fill(Tile.Wall)];
+      const room = new GameRoom("fuite", { width: 9, height: 3, tiles });
+      const socket = fakeSocket();
+      room.join("a", "Ana", socket);
+      room.join("b", "Bob", fakeSocket());
+      const move = (id: string, direction: "LEFT" | "RIGHT" | "UP") =>
+        room.handle(id, { type: "MOVE", direction });
+      for (let i = 0; i < 3; i++) {
+        move("a", "RIGHT");
+        if (i < 2) move("b", "LEFT");
+        vi.advanceTimersByTime(STEP_MS);
+      }
+      // Les protections de départ sont passées, plus aucun pas en attente.
+      vi.advanceTimersByTime(2000);
+      const a = () => seen(socket, "a");
+      const b = () => seen(socket, "b");
+      expect([a().x, b().x]).toEqual([4, 5]);
+      return { move, a, b };
+    }
+
+    it("touche une cible immobile, une fois la chance de fuir passée", () => {
+      const { move, a, b } = faceToFace();
+      move("a", "RIGHT");
+      expect(a().x).toBe(4);
+
+      vi.advanceTimersByTime(FLEE_MS);
+
+      expect(a().x).toBe(5);
+      expect(b().x).toBe(7); // renvoyé chez lui
+    });
+
+    it("laisse fuir la victime qui part dans l'intervalle", () => {
+      const { move, a, b } = faceToFace();
+      move("a", "RIGHT");
+      vi.advanceTimersByTime(FLEE_MS / 2);
+      move("b", "RIGHT");
+
+      vi.advanceTimersByTime(FLEE_MS);
+
+      expect(b().x).toBe(6);
+      expect(a().x).toBe(5); // entré sur la case libérée, sans toucher
+    });
+
+    it("touche la victime qui part trop tard", () => {
+      const { move, a, b } = faceToFace();
+      move("a", "RIGHT");
+      vi.advanceTimersByTime(FLEE_MS);
+      move("b", "RIGHT");
+
+      expect(a().x).toBe(5);
+      expect(b().x).toBe(7);
+    });
+
+    it("ne sauve pas une fuite contre un mur", () => {
+      const { move, a, b } = faceToFace();
+      move("a", "RIGHT");
+      move("b", "UP");
+      vi.advanceTimersByTime(FLEE_MS);
+
+      expect(a().x).toBe(5);
+      expect(b().x).toBe(7);
+    });
+
+    it("face à face : le premier arrivé touche, la riposte tombe", () => {
+      const { move, a, b } = faceToFace();
+      move("a", "RIGHT");
+      vi.advanceTimersByTime(FLEE_MS / 3);
+      move("b", "LEFT");
+
+      expect(a().x).toBe(5);
+      expect(b().x).toBe(7);
+      vi.advanceTimersByTime(STEP_MS * 3);
+      expect(b().x).toBe(7);
+    });
+
+    it("garde le pas demandé pendant la retenue", () => {
+      const { move, a } = faceToFace();
+      move("a", "RIGHT");
+      move("a", "RIGHT");
+      vi.advanceTimersByTime(FLEE_MS);
+      expect(a().x).toBe(5);
+
+      vi.advanceTimersByTime(STEP_MS);
+
+      expect(a().x).toBe(6);
     });
   });
 
@@ -521,6 +624,56 @@ describe("GameRoom", () => {
             },
           ],
         });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("récompense le vainqueur connecté : son compte et ses pas, et le message n'est que pour lui", async () => {
+      vi.useFakeTimers();
+      try {
+        const reward = vi.fn().mockResolvedValue({ type: "CHEST", outcome: "won", rarity: "or" });
+        const room = new GameRoom("room-reward", mapWithGoal, [], 2 * POINTS_PER_BASE, {
+          mapName: "#1 map 1v1",
+          mode: "duel",
+          onEnd: vi.fn(),
+          reward,
+        });
+        const winner = fakeSocket();
+        const other = fakeSocket();
+        room.join("p1", "Alice", winner, "anon-1", [], "compte-alice");
+        room.join("p2", "Bob", other, "anon-2");
+
+        scoreOnce(room);
+        scoreOnce(room);
+        await vi.runAllTimersAsync();
+
+        expect(reward).toHaveBeenCalledWith({
+          accountId: "compte-alice",
+          moves: expect.any(Number),
+        });
+        expect(reward.mock.calls[0]![0].moves).toBeGreaterThan(0);
+        expect(lastMessage(winner)).toEqual({ type: "CHEST", outcome: "won", rarity: "or" });
+        expect(lastMessage(other).type).toBe("END");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("ne récompense pas un vainqueur invité", () => {
+      vi.useFakeTimers();
+      try {
+        const reward = vi.fn();
+        const room = new GameRoom("room-guest", mapWithGoal, [], 2 * POINTS_PER_BASE, {
+          mapName: "#1 map 1v1",
+          mode: "duel",
+          onEnd: vi.fn(),
+          reward,
+        });
+        room.join("p1", "Invité", fakeSocket(), "anon-1");
+        scoreOnce(room);
+        scoreOnce(room);
+        expect(reward).not.toHaveBeenCalled();
       } finally {
         vi.useRealTimers();
       }

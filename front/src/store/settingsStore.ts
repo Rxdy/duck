@@ -7,6 +7,7 @@ import {
   type Settings,
   type TouchControlsSetting,
 } from "../lib/settings.js";
+import type { SceneryMode } from "../lib/scenery.js";
 
 export const useSettingsStore = defineStore("settings", {
   state: (): Settings => loadSettings(),
@@ -41,6 +42,10 @@ export const useSettingsStore = defineStore("settings", {
     },
     setTouchControls(value: TouchControlsSetting) {
       this.touchControls = value;
+      this.persist();
+    },
+    setScenery(value: SceneryMode) {
+      this.scenery = value;
       this.persist();
     },
     persist() {

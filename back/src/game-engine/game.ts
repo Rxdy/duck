@@ -61,6 +61,26 @@ function sentHome(player: Player, now: number): Player {
   return { ...player, x: player.spawnX, y: player.spawnY, immuneUntil: now + IMMUNITY_MS };
 }
 
+/**
+ * L'adversaire que ce coup toucherait, s'il était joué maintenant : celui qui occupe la case visée
+ * et qu'on a le droit de toucher. Sert à la salle pour laisser à la victime une chance de fuir.
+ */
+export function wouldTag(
+  state: GameState,
+  playerId: string,
+  direction: Direction,
+  now: number = Date.now(),
+): Player | undefined {
+  const mover = state.players.find((p) => p.id === playerId);
+  const delta = DIRECTION_DELTA[direction];
+  if (!mover || !delta) return undefined;
+  const x = mover.x + delta.dx;
+  const y = mover.y + delta.dy;
+  if (!isWalkable(state.map, x, y)) return undefined;
+  const target = state.players.find((p) => p.id !== playerId && p.x === x && p.y === y);
+  return target && canTag(mover, target, now) ? target : undefined;
+}
+
 export function applyMove(
   state: GameState,
   playerId: string,

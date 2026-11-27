@@ -87,3 +87,33 @@ describe("createDuckMotion", () => {
     for (const speed of speeds.slice(4)) expect(Math.abs(speed - 1)).toBeLessThan(0.21);
   });
 });
+
+describe("toucher", () => {
+  it("la victime reste à sa case jusqu'à l'impact, puis réapparaît chez elle", async () => {
+    const { createDuckMotion, KNOCK_MS, WARP_MS } = await import("./useDuckMotion.js");
+    const motion = createDuckMotion(5, 2);
+    motion.knockOut(7, 2, 0, 100);
+
+    expect(motion.poseAt(50)).toMatchObject({ x: 5, y: 2, appear: 1 });
+    const ejected = motion.poseAt(100 + KNOCK_MS / 2);
+    expect(ejected.x).toBe(5);
+    expect(ejected.appear).toBeCloseTo(0.5);
+    expect(motion.poseAt(100 + KNOCK_MS + WARP_MS)).toMatchObject({ x: 7, y: 2, appear: 1 });
+  });
+
+  it("un ordre reçu pendant l'éjection repart de la base", async () => {
+    const { createDuckMotion, KNOCK_MS } = await import("./useDuckMotion.js");
+    const motion = createDuckMotion(5, 2);
+    motion.knockOut(7, 2, 0, 100);
+    motion.moveTo(7, 1, 150);
+    expect(motion.poseAt(150 + KNOCK_MS + 1000)).toMatchObject({ x: 7, y: 1 });
+    expect(motion.poseAt(151).x).toBeCloseTo(7);
+  });
+
+  it("animations réduites : renvoyée tout de suite", async () => {
+    const { createDuckMotion } = await import("./useDuckMotion.js");
+    const motion = createDuckMotion(5, 2);
+    motion.knockOut(7, 2, 0, 100, true);
+    expect(motion.poseAt(1)).toMatchObject({ x: 7, y: 2 });
+  });
+});

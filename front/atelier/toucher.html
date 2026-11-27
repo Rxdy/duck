@@ -1,0 +1,158 @@
+<!doctype html>
+<!-- Deux canards qui se touchent, sur le vrai plateau du jeu : /atelier/toucher.html (pas inclus dans le build).
+     ?lent=8 ralentit tout (glissade, effets) huit fois, pour regarder image par image. -->
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Le toucher</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0f1218;
+        color: #f1f5f9;
+        font: 15px system-ui;
+      }
+      #app {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      #board {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+      }
+      #board > div {
+        position: absolute;
+        inset: 0;
+      }
+      nav {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+        padding: 10px;
+        flex-wrap: wrap;
+      }
+      button {
+        padding: 8px 14px;
+        border: 1px solid #3a4457;
+        border-radius: 10px;
+        background: #1a1f2a;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+      }
+    </style>
+    <script>
+      // Ralenti : l'horloge de l'animation tourne moins vite, la logique suit le même facteur.
+      window.SLOW = Number(new URLSearchParams(location.search).get("lent")) || 1;
+      const real = performance.now.bind(performance);
+      const t0 = real();
+      performance.now = () => t0 + (real() - t0) / window.SLOW;
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module">
+      import { createApp, h, reactive } from "vue";
+      import { createPinia } from "pinia";
+      import BoardPreview from "/src/components/organisms/BoardPreview.vue";
+      import { GLIDE_MS } from "/src/lib/coincoin.ts";
+
+      const IMMUNITY_MS = 1500;
+      const state = reactive({ players: [] });
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms * window.SLOW));
+
+      function reset(ax, bx) {
+        state.players = [
+          {
+            id: "a",
+            x: ax,
+            y: 2,
+            color: "#FF4D6D",
+            facing: "RIGHT",
+            spawnX: 1,
+            spawnY: 2,
+            immuneForMs: 0,
+          },
+          {
+            id: "b",
+            x: bx,
+            y: 2,
+            color: "#22D3EE",
+            facing: "LEFT",
+            spawnX: 7,
+            spawnY: 2,
+            immuneForMs: 0,
+          },
+        ];
+      }
+      const set = (id, patch) =>
+        (state.players = state.players.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+      const tag = (attacker, victim, x) => {
+        // Ce que le serveur envoie au même instant : l'attaquant entre, la victime est déjà chez elle.
+        const v = state.players.find((p) => p.id === victim);
+        state.players = state.players.map((p) =>
+          p.id === attacker
+            ? { ...p, x }
+            : p.id === victim
+              ? { ...p, x: v.spawnX, y: v.spawnY, immuneForMs: IMMUNITY_MS }
+              : p,
+        );
+      };
+
+      const scenarios = {
+        // B s'échappe pendant la chance de fuir : le serveur joue son pas, puis celui de A, sans toucher.
+        async fuite() {
+          reset(4, 5);
+          await wait(500);
+          window.TAG_AT = performance.now();
+          set("b", { x: 6, facing: "RIGHT" });
+          await wait(45);
+          set("a", { x: 5 });
+        },
+        // A avance de deux cases et entre sur B, immobile.
+        async poursuite() {
+          reset(2, 5);
+          await wait(500);
+          set("a", { x: 3 });
+          await wait(GLIDE_MS);
+          set("a", { x: 4 });
+          await wait(GLIDE_MS);
+          window.TAG_AT = performance.now();
+          tag("a", "b", 5);
+        },
+        // Les deux foncent l'un vers l'autre : A arrive le premier au serveur.
+        async face() {
+          reset(2, 5);
+          await wait(500);
+          state.players = state.players.map((p) => ({ ...p, x: p.id === "a" ? 3 : 4 }));
+          await wait(GLIDE_MS);
+          window.TAG_AT = performance.now();
+          tag("a", "b", 4);
+        },
+      };
+      window.play = (name) => scenarios[name]();
+
+      createApp({
+        render: () =>
+          h("div", { id: "app" }, [
+            h("div", { id: "board" }, [
+              h(BoardPreview, { width: 9, height: 5, players: state.players }),
+            ]),
+            h("nav", [
+              h("button", { onClick: () => play("poursuite") }, "A rattrape B"),
+              h("button", { onClick: () => play("face") }, "Face à face"),
+              h("button", { onClick: () => play("fuite") }, "B s'enfuit"),
+            ]),
+          ]),
+      })
+        .use(createPinia())
+        .mount("#app");
+      reset(2, 5);
+    </script>
+  </body>
+</html>

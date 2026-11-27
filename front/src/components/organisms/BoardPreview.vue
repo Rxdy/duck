@@ -1,7 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { OrthographicCamera, Plane, Raycaster, Vector2, Vector3 } from "three";
+import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
+import { BufferGeometry, OrthographicCamera, Plane, Raycaster, Vector2, Vector3 } from "three";
 import { TresCanvas } from "@tresjs/core";
+import { mergeBoard } from "../../lib/boardGeometry.js";
+import { resolveScenery } from "../../lib/scenery.js";
+import { useDeviceType } from "../../composables/useDeviceType.js";
+import BoardScenery from "./BoardScenery.vue";
+import TagBurst from "./TagBurst.vue";
+import { detectTags } from "../../lib/tags.js";
+import { IMPACT_MS } from "../../composables/useDuckMotion.js";
 import { useSettingsStore } from "../../store/settingsStore.js";
 import {
   boardBackground,
@@ -11,7 +18,6 @@ import {
   fitCameraToBoard,
   isWebglAvailable,
   SUN_POSITION,
-  TILE_SIZE,
   zoomBounds,
   closeUpZoom,
   zoomAt,
@@ -84,14 +90,62 @@ const territoryBases = computed<TerritoryBase[]>(
 // La lecture de la carte vit dans board.ts, partagée avec les vignettes de
 // « Mes cartes » (voir lib/mapThumbnail.ts) : une vignette qui ne montre pas
 // exactement le plateau qu'on va jouer ne sert à rien.
+// Touchers : la victime attend que l'attaquant arrive sur elle (voir useDuckMotion#IMPACT_MS), et un
+// éclat de la couleur de l'attaquant marque le contact. Calculé avant le rendu, pour que la victime
+// reçoive l'instant de l'impact en même temps que sa nouvelle position.
+const knocks = ref<Record<string, number>>({});
+const bursts = ref<{ key: number; x: number; y: number; color: string; at: number }[]>([]);
+let burstKey = 0;
+watch(
+  () => props.players ?? [],
+  (next, previous) => {
+    const tags = detectTags(previous ?? [], next);
+    if (!tags.length) return;
+    const at = performance.now() + IMPACT_MS;
+    knocks.value = { ...knocks.value, ...Object.fromEntries(tags.map((t) => [t.victimId, at])) };
+    bursts.value = [
+      ...bursts.value.filter((b) => b.at > at - 2000),
+      ...tags.map((t) => ({ key: ++burstKey, x: t.x, y: t.y, color: t.color, at })),
+    ];
+  },
+  { flush: "pre" },
+);
+function burstDone(key: number) {
+  bursts.value = bursts.value.filter((b) => b.key !== key);
+}
+
+const { isTouchDevice } = useDeviceType();
+// L'éditeur reste tactique : il faut y lire la grille. Une machine qui peine, en « auto », y revient aussi.
+const tooSlow = ref(false);
+const scenery = computed(() =>
+  props.editable || tooSlow.value
+    ? "tactique"
+    : resolveScenery(settings.scenery, isTouchDevice.value),
+);
+function sceneryTooSlow() {
+  if (settings.scenery === "auto") tooSlow.value = true;
+}
+
 const renderTiles = computed(() =>
   buildBoardMeshes({
     width: props.width,
     height: props.height,
     tiles: props.tiles,
     bases: territoryBases.value,
+    scenery: scenery.value,
   }),
 );
+const grassTiles = computed(() =>
+  scenery.value === "paysage" ? renderTiles.value.filter((tile) => tile.plain) : [],
+);
+// Un seul appel de dessin pour tout le sol et les murs, refait seulement si la carte change.
+const boardGeometry = shallowRef<BufferGeometry>(mergeBoard(renderTiles.value));
+watch(renderTiles, (tiles) => {
+  const old = boardGeometry.value;
+  boardGeometry.value = mergeBoard(tiles);
+  old.dispose();
+});
+onUnmounted(() => boardGeometry.value.dispose());
 
 // Certains navigateurs/webviews ne peuvent créer aucun contexte WebGL : on le
 // vérifie avant de monter TresCanvas pour éviter un crash silencieux (voir
@@ -279,14 +333,16 @@ function endStroke(event: PointerEvent) {
       <TresAmbientLight :intensity="0.35" />
       <TresDirectionalLight :position="SUN_POSITION" :intensity="1.3" />
 
-      <TresMesh
-        v-for="tile in renderTiles"
-        :key="`${tile.x}-${tile.y}`"
-        :position="[tile.x + 0.5, tile.centerY, tile.y + 0.5]"
-      >
-        <TresBoxGeometry :args="[TILE_SIZE, tile.height, TILE_SIZE]" />
-        <TresMeshStandardMaterial :color="tile.color" />
+      <TresMesh :geometry="boardGeometry">
+        <TresMeshStandardMaterial vertex-colors />
       </TresMesh>
+
+      <BoardScenery
+        v-if="scenery === 'paysage'"
+        :tiles="grassTiles"
+        :animated="!settings.reducedMotion"
+        @slow="sceneryTooSlow"
+      />
 
       <template v-if="props.marker">
         <TresMesh
@@ -314,6 +370,17 @@ function endStroke(event: PointerEvent) {
         :outfit="player.outfit"
         :color="player.color"
         :immune-for-ms="player.immuneForMs ?? 0"
+        :knock-at="knocks[player.id]"
+      />
+
+      <TagBurst
+        v-for="burst in bursts"
+        :key="burst.key"
+        :x="burst.x"
+        :y="burst.y"
+        :color="burst.color"
+        :at="burst.at"
+        @done="burstDone(burst.key)"
       />
     </TresCanvas>
 

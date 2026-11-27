@@ -1,4 +1,11 @@
-import { applyMove, Tile, type GameMap, type GameState } from "./game-engine/index.js";
+import {
+  applyMove,
+  DIRECTION_DELTA,
+  Tile,
+  wouldTag,
+  type GameMap,
+  type GameState,
+} from "./game-engine/index.js";
 import { BOT_LEVELS, chooseBotDirection, DEFAULT_BOT_LEVEL, type BotLevel } from "./bots.js";
 import type {
   ClientMessage,
@@ -23,7 +30,20 @@ export interface MatchContext {
   mapName: string;
   mode: GameMode;
   onEnd: (result: MatchResult) => void;
+  /**
+   * Récompense du vainqueur s'il a un compte (partie publique seulement) : le message renvoyé lui est
+   * envoyé, à lui seul, après END.
+   */
+  reward?: (winner: { accountId: string; moves: number }) => Promise<ServerMessage | undefined>;
 }
+
+/**
+ * Chance de fuir. Quand un coup toucherait un adversaire, la salle attend ce délai avant de le jouer :
+ * si la victime part dans l'intervalle, elle s'échappe et l'attaquant entre simplement sur la case
+ * libérée. Deux joueurs qui appuient presque en même temps ne se départagent plus à l'ordre
+ * d'arrivée des messages : on ne pénalise pas celui qui fuit. Assez court pour ne pas se sentir.
+ */
+export const FLEE_MS = 90;
 
 export class GameRoom {
   private state: GameState;
@@ -31,10 +51,25 @@ export class GameRoom {
   private botTimers: ReturnType<typeof setInterval>[] = [];
   private spawnOrder: WireSpawn[];
   private lastMoveAt = new Map<string, number>();
+  /** Compte de chaque joueur connecté (absent pour un invité ou un bot). */
+  private accountIds = new Map<string, string>();
+  /** Pas réellement joués par chacun : en dessous d'un seuil, on n'a pas vraiment joué. */
+  private moves = new Map<string, number>();
   /** Le pas demandé pendant une glissade : il part dès qu'elle finit. Un seul, le dernier. */
   private pending = new Map<
     string,
     { direction: Direction; timer: ReturnType<typeof setTimeout> }
+  >();
+  /** Coups qui toucheraient quelqu'un, retenus le temps de lui laisser fuir (FLEE_MS). */
+  private holds = new Map<
+    string,
+    {
+      direction: Direction;
+      victimId: string;
+      timer: ReturnType<typeof setTimeout>;
+      /** Le pas demandé pendant la retenue : il suit, au rythme normal. */
+      then?: Direction;
+    }
   >();
   private winScore?: number;
   private matchContext?: MatchContext;
@@ -134,9 +169,11 @@ export class GameRoom {
     socket: WebSocket,
     anonId?: string,
     outfit?: string[],
+    accountId?: string,
   ): void {
     this.startedAt ??= Date.now();
     this.sockets.set(playerId, socket);
+    if (accountId) this.accountIds.set(playerId, accountId);
     this.addPlayer(playerId, name, outfit);
     if (anonId) this.anonIds.set(playerId, anonId);
     this.broadcastState();
@@ -217,6 +254,7 @@ export class GameRoom {
     this.sockets.delete(playerId);
     this.state.players = this.state.players.filter((p) => p.id !== playerId);
     this.lastMoveAt.delete(playerId);
+    this.accountIds.delete(playerId);
     this.forget(playerId);
     this.anonIds.delete(playerId);
     // Plus aucun humain dans la salle : on arrête les bots pour ne pas
@@ -250,6 +288,11 @@ export class GameRoom {
 
   /** Un pas à la fois, le temps d'une glissade entière (STEP_MS). */
   private pace(playerId: string, direction: Direction): void {
+    const held = this.holds.get(playerId);
+    if (held) {
+      held.then = direction;
+      return;
+    }
     const queued = this.pending.get(playerId);
     if (queued) {
       queued.direction = direction;
@@ -271,7 +314,53 @@ export class GameRoom {
   private step(playerId: string, direction: Direction): void {
     if (this.ended) return;
     const now = Date.now();
+
+    // Visé par un coup retenu, et ce pas fonce sur l'attaquant : il était là le premier, il touche.
+    for (const [attackerId, hold] of this.holds) {
+      if (hold.victimId !== playerId || !this.movesOnto(playerId, direction, attackerId)) continue;
+      const immuneBefore = this.immuneUntil(playerId);
+      this.resolveHold(attackerId);
+      if (this.immuneUntil(playerId) !== immuneBefore) return; // renvoyé chez lui : son pas tombe
+    }
+
+    const victim = wouldTag(this.state, playerId, direction, now);
+    if (victim) {
+      this.lastMoveAt.set(playerId, now);
+      this.holds.set(playerId, {
+        direction,
+        victimId: victim.id,
+        timer: setTimeout(() => this.resolveHold(playerId), FLEE_MS),
+      });
+      return;
+    }
+    this.apply(playerId, direction, now);
+  }
+
+  private movesOnto(playerId: string, direction: Direction, otherId: string): boolean {
+    const me = this.state.players.find((p) => p.id === playerId);
+    const other = this.state.players.find((p) => p.id === otherId);
+    const delta = DIRECTION_DELTA[direction];
+    return !!me && !!other && !!delta && me.x + delta.dx === other.x && me.y + delta.dy === other.y;
+  }
+
+  private immuneUntil(playerId: string): number | undefined {
+    return this.state.players.find((p) => p.id === playerId)?.immuneUntil;
+  }
+
+  /** Fin de la chance de fuir : le coup retenu est joué sur l'état du moment. */
+  private resolveHold(playerId: string): void {
+    const hold = this.holds.get(playerId);
+    if (!hold) return;
+    clearTimeout(hold.timer);
+    this.holds.delete(playerId);
+    this.apply(playerId, hold.direction, Date.now());
+    if (hold.then && !this.ended) this.pace(playerId, hold.then);
+  }
+
+  private apply(playerId: string, direction: Direction, now: number): void {
+    if (this.ended) return;
     this.lastMoveAt.set(playerId, now);
+    this.moves.set(playerId, (this.moves.get(playerId) ?? 0) + 1);
     const before = new Map(this.state.players.map((p) => [p.id, p.immuneUntil]));
     this.state = applyMove(this.state, playerId, direction, now);
     // Renvoyé à sa base (touché, ou point marqué) : le pas demandé d'avant ne vaut plus.
@@ -285,6 +374,8 @@ export class GameRoom {
   private forget(playerId: string): void {
     clearTimeout(this.pending.get(playerId)?.timer);
     this.pending.delete(playerId);
+    clearTimeout(this.holds.get(playerId)?.timer);
+    this.holds.delete(playerId);
   }
 
   /**
@@ -301,7 +392,7 @@ export class GameRoom {
 
     this.ended = true;
     this.stopBots();
-    for (const id of [...this.pending.keys()]) this.forget(id);
+    for (const id of [...this.pending.keys(), ...this.holds.keys()]) this.forget(id);
 
     if (this.matchContext) {
       this.matchContext.onEnd({
@@ -322,6 +413,17 @@ export class GameRoom {
     const payload = JSON.stringify(message);
     for (const socket of this.sockets.values()) {
       socket.send(payload);
+    }
+
+    const accountId = this.accountIds.get(winner.id);
+    if (accountId && this.matchContext?.reward) {
+      const moves = this.moves.get(winner.id) ?? 0;
+      this.matchContext
+        .reward({ accountId, moves })
+        .then((reward) => {
+          if (reward) this.sockets.get(winner.id)?.send(JSON.stringify(reward));
+        })
+        .catch((error: unknown) => console.error("Échec de la récompense :", error));
     }
   }
 

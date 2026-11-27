@@ -19,6 +19,11 @@ const props = withDefaults(
     immuneForMs?: number;
     /** Accessoires portés. */
     outfit?: string[];
+    /**
+     * Touché : instant (performance.now) où l'attaquant arrive sur lui. Donné avec la nouvelle
+     * position, il fait attendre l'impact avant le retour à la base.
+     */
+    knockAt?: number;
   }>(),
   { immuneForMs: 0, outfit: () => [] },
 );
@@ -63,7 +68,14 @@ function place(target: Coincoin, now: number) {
 
 watch(
   () => [props.x, props.y] as const,
-  ([x, y]) => motion.moveTo(x, y, performance.now(), settings.reducedMotion),
+  ([x, y]) => {
+    const now = performance.now();
+    if (props.knockAt !== undefined && props.knockAt >= now - 50) {
+      motion.knockOut(x, y, now, props.knockAt - now, settings.reducedMotion);
+    } else {
+      motion.moveTo(x, y, now, settings.reducedMotion);
+    }
+  },
 );
 // Déclaré après la position : quand les deux changent, l'ordre reçu l'emporte.
 watch(

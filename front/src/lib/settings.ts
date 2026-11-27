@@ -1,4 +1,5 @@
 import type { Direction } from "../types.js";
+import { SCENERY_MODES, type SceneryMode } from "./scenery.js";
 
 export type KeyBindings = Record<Direction, string>;
 
@@ -13,6 +14,8 @@ export interface Settings {
   reducedMotion: boolean;
   colorblindMode: boolean;
   touchControls: TouchControlsSetting;
+  /** Décor de la carte : tactique (sobre), paysage, ou selon l'appareil. */
+  scenery: SceneryMode;
 }
 
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
@@ -31,6 +34,8 @@ export const DEFAULT_SETTINGS: Settings = {
   colorblindMode: false,
   // Des boutons par défaut : le doigt ne passe pas devant le plateau.
   touchControls: "boutons",
+  // Tactique tant que le paysage n'est pas au point (herbe à refaire).
+  scenery: "tactique",
 };
 
 function clampVolume(value: unknown, fallback: number): number {
@@ -75,6 +80,9 @@ export function parseSettings(raw: unknown): Settings {
       r.touchControls === "boutons" || r.touchControls === "zones"
         ? r.touchControls
         : DEFAULT_SETTINGS.touchControls,
+    scenery: SCENERY_MODES.includes(r.scenery as SceneryMode)
+      ? (r.scenery as SceneryMode)
+      : DEFAULT_SETTINGS.scenery,
   };
 }
 
