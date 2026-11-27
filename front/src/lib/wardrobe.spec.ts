@@ -1,10 +1,11 @@
+import { Box3, Mesh, type Object3D } from "three";
 import { describe, expect, it } from "vitest";
 import * as catalog from "./accessories/accessoires.js";
 import { createCoincoin } from "./coincoin.js";
 import { dress } from "./outfit.js";
 import { collection, randomOutfit, sameOutfit, wear } from "./wardrobe.js";
 
-const { ACCESSOIRES } = catalog;
+const { ACCESSOIRES, habiller } = catalog;
 // Lu par Vite et non importé : l'image Docker du front se construit sans le dossier du serveur.
 const serverLists = import.meta.glob<unknown>("../../../back/src/accessories.json", {
   eager: true,
@@ -104,5 +105,40 @@ describe("garde-robe", () => {
   it("compare deux tenues sans tenir compte de l'ordre", () => {
     expect(sameOutfit(["cape", "couronne"], ["couronne", "cape"])).toBe(true);
     expect(sameOutfit(["cape"], [])).toBe(false);
+  });
+});
+
+describe("fusion des volumes d'une tenue", () => {
+  const measure = (object: Object3D) => {
+    let triangles = 0;
+    let meshes = 0;
+    object.traverse((o) => {
+      if (!(o instanceof Mesh)) return;
+      meshes++;
+      const g = o.geometry;
+      triangles += (g.index ? g.index.count : g.attributes.position!.count) / 3;
+    });
+    const box = new Box3().setFromObject(object, true);
+    return { triangles, meshes, box };
+  };
+
+  it("garde chaque pièce identique (formes, encombrement) en réduisant les appels de dessin", () => {
+    let before = 0;
+    let after = 0;
+    for (const item of ACCESSOIRES) {
+      const raw = createCoincoin("#FF4D6D");
+      const reference = measure(habiller(raw, [item.id]));
+      const worn = dress(createCoincoin("#FF4D6D"), [item.id]);
+      const fused = measure(worn.object);
+      expect(fused.triangles, item.id).toBe(reference.triangles);
+      expect(fused.meshes, item.id).toBeLessThanOrEqual(reference.meshes);
+      for (const corner of ["min", "max"] as const) {
+        expect(fused.box[corner].distanceTo(reference.box[corner]), item.id).toBeLessThan(1e-4);
+      }
+      before += reference.meshes;
+      after += fused.meshes;
+      worn.dispose();
+    }
+    expect(after).toBeLessThan(before * 0.7);
   });
 });
