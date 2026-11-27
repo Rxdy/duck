@@ -17,15 +17,11 @@ import {
 } from "three";
 import { ANTENNA_COLORS, createCoincoin } from "./coincoin.js";
 import { dress } from "./outfit.js";
+import { applyPortraitFrame, createStudioCamera } from "./portraitFrame.js";
 import { accessoryById } from "./wardrobe.js";
 
 const THUMBNAIL_SIZE = 256;
 const DUCK_SIZE = 512;
-/** La vue du canard dans les menus, celle de ses images d'origine : de trois quarts, bec à gauche. */
-const AZIMUTH = (35 * Math.PI) / 180;
-const ELEVATION = (20 * Math.PI) / 180;
-const LOOK_AT = 0.72;
-const DISTANCE = 6;
 const cache = new Map<string, string>();
 let studio:
   { renderer: WebGLRenderer; scene: Scene; camera: OrthographicCamera } | null | undefined;
@@ -43,14 +39,7 @@ function openStudio() {
     const sun = new DirectionalLight(0xffffff, 1.6);
     sun.position.set(-1, 6, 5);
     scene.add(sun);
-    const camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 50);
-    camera.position.set(
-      DISTANCE * Math.cos(ELEVATION) * Math.sin(AZIMUTH),
-      LOOK_AT + DISTANCE * Math.sin(ELEVATION),
-      DISTANCE * Math.cos(ELEVATION) * Math.cos(AZIMUTH),
-    );
-    camera.lookAt(0, LOOK_AT, 0);
-    camera.updateMatrixWorld();
+    const camera = createStudioCamera();
     studio = { renderer, scene, camera };
   } catch {
     studio = null;
@@ -137,8 +126,10 @@ function picture({ color, outfit, size, alone = false, back = false }: Shot) {
   duck.group.rotation.y = back ? Math.PI : 0;
 
   room.scene.add(duck.group);
-  // L'accessoire seul se cadre sur lui, pas sur le canard invisible qui le porte.
-  frame(room.camera, alone ? dressing.object : duck.group);
+  // L'accessoire seul se cadre sur lui, pas sur le canard invisible qui le porte. Le canard, lui,
+  // garde un cadre fixe : il ne bouge ni ne change de taille selon ce qu'il porte.
+  if (alone) frame(room.camera, dressing.object);
+  else applyPortraitFrame(room.camera, back);
   room.renderer.setSize(size, size, false);
   room.renderer.render(room.scene, room.camera);
   const url = room.renderer.domElement.toDataURL("image/png");
